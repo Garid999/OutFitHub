@@ -18,11 +18,13 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  AppColors c = AppColors.light;
   final _emailCtrl = TextEditingController();
   final _passCtrl  = TextEditingController();
   final _passFocus = FocusNode();
-  bool _obscure    = true;
-  bool _isLoading  = false;
+  bool    _obscure   = true;
+  bool    _isLoading = false;
+  String? _errorMsg;
 
   @override
   void initState() {
@@ -50,10 +52,9 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _login() async {
+    setState(() => _errorMsg = null);
     if (_emailCtrl.text.isEmpty || _passCtrl.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Имэйл болон нууц үгээ оруулна уу')),
-      );
+      setState(() => _errorMsg = 'Имэйл болон нууц үгээ оруулна уу');
       return;
     }
     setState(() => _isLoading = true);
@@ -92,27 +93,25 @@ class _LoginScreenState extends State<LoginScreen> {
       );
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
-      setState(() => _isLoading = false);
       final msg = switch (e.code) {
-        'user-not-found'     => 'Энэ имэйлтэй хэрэглэгч олдсонгүй',
+        'user-not-found'     => 'Имэйл хаяг олдсонгүй',
         'wrong-password'     => 'Нууц үг буруу байна',
         'invalid-email'      => 'Имэйл хаяг буруу байна',
         'invalid-credential' => 'Имэйл эсвэл нууц үг буруу байна',
-        _                    => 'Алдаа гарлаа (${e.code})',
+        _                    => 'Нэвтрэхэд алдаа гарлаа',
       };
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(msg), backgroundColor: AppTheme.primary),
-      );
+      setState(() { _isLoading = false; _errorMsg = msg; });
     } catch (_) {
       if (!mounted) return;
-      setState(() => _isLoading = false);
+      setState(() { _isLoading = false; _errorMsg = 'Нэвтрэхэд алдаа гарлаа'; });
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    c = context.c;
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: c.background,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 28),
@@ -127,7 +126,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: Colors.white,
-                  border: Border.all(color: AppTheme.border, width: 2),
+                  border: Border.all(color: c.border, width: 2),
                   boxShadow: const [
                     BoxShadow(
                       color: Color(0x20000000),
@@ -143,10 +142,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     fit: BoxFit.contain,
                     errorBuilder: (_, __, ___) => Container(
                       color: Colors.white,
-                      child: const Center(
+                      child: Center(
                         child: Text('AS',
                             style: TextStyle(
-                                color: AppTheme.primary,
+                                color: c.primary,
                                 fontSize: 40,
                                 fontWeight: FontWeight.w900)),
                       ),
@@ -155,17 +154,17 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
 
-              const SizedBox(height: 20),
-              const Text('Anime Store',
+              SizedBox(height: 20),
+              Text('Anime Store',
                   style: TextStyle(
-                      color: AppTheme.textPrimary,
+                      color: c.textPrimary,
                       fontSize: 30,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 0.5)),
-              const SizedBox(height: 6),
-              const Text('Таны аниме фэшн дэлгүүр',
+              SizedBox(height: 6),
+              Text('Таны аниме фэшн дэлгүүр',
                   style: TextStyle(
-                      color: AppTheme.textSecondary,
+                      color: c.textSecondary,
                       fontSize: 14,
                       letterSpacing: 0.3)),
 
@@ -180,6 +179,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 icon: Icons.mail_outline_rounded,
                 inputType: TextInputType.emailAddress,
                 action: TextInputAction.next,
+                onChanged: (_) { if (_errorMsg != null) setState(() => _errorMsg = null); },
                 onSubmitted: (_) => FocusScope.of(context).requestFocus(_passFocus),
               ),
 
@@ -193,38 +193,60 @@ class _LoginScreenState extends State<LoginScreen> {
                 focusNode: _passFocus,
                 obscureText: _obscure,
                 textInputAction: TextInputAction.done,
+                onChanged: (_) { if (_errorMsg != null) setState(() => _errorMsg = null); },
                 onSubmitted: (_) { if (!_isLoading) _login(); },
-                style: const TextStyle(color: AppTheme.textPrimary, fontSize: 15),
+                style: TextStyle(color: c.textPrimary, fontSize: 15),
                 decoration: InputDecoration(
-                  prefixIcon: const Icon(Icons.lock_outline_rounded,
-                      color: AppTheme.primary),
+                  prefixIcon: Icon(Icons.lock_outline_rounded,
+                      color: c.primary),
                   suffixIcon: IconButton(
                     icon: Icon(
                         _obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                        color: AppTheme.textSecondary, size: 20),
+                        color: c.textSecondary, size: 20),
                     onPressed: () => setState(() => _obscure = !_obscure),
                   ),
                   filled: true,
-                  fillColor: AppTheme.surface,
+                  fillColor: c.surface,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppTheme.border),
+                    borderSide: BorderSide(
+                        color: _errorMsg != null ? Colors.red : c.border),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppTheme.border),
+                    borderSide: BorderSide(
+                        color: _errorMsg != null ? Colors.red : c.border),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppTheme.primary, width: 1.5),
+                    borderSide: BorderSide(
+                        color: _errorMsg != null ? Colors.red : c.primary,
+                        width: 1.5),
                   ),
                 ),
               ),
 
-              const SizedBox(height: 32),
+              // Inline error message
+              if (_errorMsg != null) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Icon(Icons.error_outline_rounded,
+                        color: Colors.red, size: 14),
+                    const SizedBox(width: 6),
+                    Text(_errorMsg!,
+                        style: const TextStyle(
+                            color: Colors.red,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500)),
+                  ],
+                ),
+              ],
+
+              SizedBox(height: 24),
 
               _isLoading
-                  ? const CircularProgressIndicator(color: AppTheme.primary)
+                  ? CircularProgressIndicator(color: c.primary)
                   : ElevatedButton(
                       onPressed: _login,
                       child: const Text('НЭВТРЭХ',
@@ -234,21 +256,21 @@ class _LoginScreenState extends State<LoginScreen> {
                               letterSpacing: 1.2)),
                     ),
 
-              const SizedBox(height: 24),
+              SizedBox(height: 24),
 
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text('Бүртгэл байхгүй юу? ',
-                      style: TextStyle(color: AppTheme.textSecondary, fontSize: 14)),
+                  Text('Бүртгэл байхгүй юу? ',
+                      style: TextStyle(color: c.textSecondary, fontSize: 14)),
                   GestureDetector(
                     onTap: () => Navigator.push(
                       context,
                       MaterialPageRoute(builder: (_) => const RegisterScreen()),
                     ),
-                    child: const Text('Бүртгүүлэх',
+                    child: Text('Бүртгүүлэх',
                         style: TextStyle(
-                            color: AppTheme.primary,
+                            color: c.primary,
                             fontSize: 14,
                             fontWeight: FontWeight.w700)),
                   ),
@@ -266,8 +288,8 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _label(String text) => Align(
         alignment: Alignment.centerLeft,
         child: Text(text,
-            style: const TextStyle(
-                color: AppTheme.textPrimary,
+            style: TextStyle(
+                color: c.textPrimary,
                 fontSize: 13,
                 fontWeight: FontWeight.w600)),
       );
@@ -278,31 +300,33 @@ class _LoginScreenState extends State<LoginScreen> {
     required IconData icon,
     TextInputType inputType = TextInputType.text,
     TextInputAction action = TextInputAction.next,
+    void Function(String)? onChanged,
     void Function(String)? onSubmitted,
   }) =>
       TextField(
         controller: controller,
         keyboardType: inputType,
         textInputAction: action,
+        onChanged: onChanged,
         onSubmitted: onSubmitted,
-        style: const TextStyle(color: AppTheme.textPrimary, fontSize: 15),
+        style: TextStyle(color: c.textPrimary, fontSize: 15),
         decoration: InputDecoration(
-          prefixIcon: Icon(icon, color: AppTheme.primary),
+          prefixIcon: Icon(icon, color: c.primary),
           hintText: hint,
-          hintStyle: const TextStyle(color: AppTheme.textSecondary, fontSize: 14),
+          hintStyle: TextStyle(color: c.textSecondary, fontSize: 14),
           filled: true,
-          fillColor: AppTheme.surface,
+          fillColor: c.surface,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: AppTheme.border),
+            borderSide: BorderSide(color: c.border),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: AppTheme.border),
+            borderSide: BorderSide(color: c.border),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: AppTheme.primary, width: 1.5),
+            borderSide: BorderSide(color: c.primary, width: 1.5),
           ),
         ),
       );

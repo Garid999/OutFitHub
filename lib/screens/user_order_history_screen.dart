@@ -12,14 +12,8 @@ class UserOrderHistoryScreen extends StatelessWidget {
   });
 
   DateTime _deadline(DateTime from) {
-    var d = from;
-    var added = 0;
-    while (added < 3) {
-      d = d.add(const Duration(days: 1));
-      if (d.weekday != DateTime.saturday &&
-          d.weekday != DateTime.sunday) added++;
-    }
-    return d;
+    final d = from.add(const Duration(days: 3));
+    return DateTime(d.year, d.month, d.day);
   }
 
   String _fmtDate(DateTime d) =>

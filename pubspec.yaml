@@ -18,6 +18,8 @@ dependencies:
   firebase_core: ^3.6.0
   firebase_auth: ^5.3.1
   cloud_firestore: ^5.4.4
+  firebase_storage: ^12.3.6
+  image_picker: ^1.1.2
   url_launcher: ^6.3.0
 
 dev_dependencies:
@@ -46,3 +48,24 @@ flutter:
     - assets/images/product_15.png
     - assets/images/product_16.png
     - assets/images/product_17.png
+    - assets/images/product_18.png
+    - assets/images/product_19.png
+    - assets/images/hoodie_1.png
+    - assets/images/hoodie_2.png
+    - assets/images/hoodie_3.png
+    - assets/images/hoodie_4.png
+    - assets/images/hoodie_5.png
+    - assets/images/hoodie_6.png
+    - assets/images/hoodie_7.png
+    - assets/images/hoodie_8.png
+    - assets/images/cat_demon_slayer.png
+    - assets/images/cat_bleach.png
+    - assets/images/cat_chainsaw_man.png
+    - assets/images/cat_attack_on_titan.png
+    - assets/images/cat_hunter_x_hunter.png
+    - assets/images/cat_jujutsu_kaisen.png
+    - assets/images/cat_solo_leveling.png
+    - assets/images/cat_kaiju_8.png
+    - assets/images/cat_dr_stone.png
+    - assets/images/cat_mashle.png
+    - assets/images/cat_hoodie.png

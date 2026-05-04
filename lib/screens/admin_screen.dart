@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import '../models/product.dart';
 import '../utils/app_theme.dart';
+import '../utils/product_seed.dart';
 import 'login_screen.dart';
+import 'admin_product_form_screen.dart';
 
 class AdminScreen extends StatefulWidget {
   const AdminScreen({super.key});
@@ -22,7 +28,7 @@ class _AdminScreenState extends State<AdminScreen>
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 4, vsync: this);
+    _tabCtrl = TabController(length: 5, vsync: this);
     _revenueMonth = _monthKey(DateTime.now());
   }
 
@@ -67,13 +73,7 @@ class _AdminScreenState extends State<AdminScreen>
       '${d.month}/${d.day}';
 
   DateTime _deadline(DateTime from) {
-    var d = from;
-    var added = 0;
-    while (added < 3) {
-      d = d.add(const Duration(days: 1));
-      if (d.weekday != DateTime.saturday &&
-          d.weekday != DateTime.sunday) added++;
-    }
+    final d = from.add(const Duration(days: 3));
     return DateTime(d.year, d.month, d.day);
   }
 
@@ -125,17 +125,207 @@ class _AdminScreenState extends State<AdminScreen>
 
   // ─── Firestore actions ─────────────────────────────────────────────────────
 
-  Future<void> _setStatus(String id, String status) =>
-      FirebaseFirestore.instance
-          .collection('orders')
-          .doc(id)
-          .update({'status': status});
+  Future<void> _setStatus(String orderId, String status) async {
+    await FirebaseFirestore.instance
+        .collection('orders')
+        .doc(orderId)
+        .update({'status': status});
+
+    if (status == 'accepted') await _decreaseStock(orderId);
+  }
+
+  Future<void> _decreaseStock(String orderId) async {
+    final snap = await FirebaseFirestore.instance
+        .collection('orders')
+        .doc(orderId)
+        .get();
+    final items = (snap.data()?['items'] as List<dynamic>?) ?? [];
+    for (final item in items) {
+      final pid  = item['productId'] as String?;
+      final size = item['size']      as String?;
+      if (pid == null || size == null) continue;
+      await FirebaseFirestore.instance
+          .collection('products')
+          .doc(pid)
+          .update({'stock.$size': FieldValue.increment(-1)});
+    }
+  }
 
   Future<void> _hide(String id) =>
       FirebaseFirestore.instance
           .collection('orders')
           .doc(id)
           .update({'hidden': true});
+
+  // ─── Migrate local asset images → Firebase Storage ────────────────────────
+
+  Future<void> _migrateImages() async {
+    final col  = FirebaseFirestore.instance.collection('products');
+    final snap = await col.get();
+    if (!mounted) return;
+
+    final toMigrate = snap.docs.where((d) {
+      final url = (d.data()['imageUrl'] as String?) ?? '';
+      return url.startsWith('assets/');
+    }).toList();
+
+    if (toMigrate.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Бүх зураг аль хэдийн Firebase-д байна'),
+        backgroundColor: Colors.blue,
+      ));
+      return;
+    }
+
+    final total    = toMigrate.length;
+    final progress = ValueNotifier<int>(0); // drives dialog rebuild
+    int   success  = 0;
+
+    // Show progress dialog driven by ValueNotifier — no StatefulBuilder needed
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          backgroundColor: const Color(0xFF1E1E1E),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              SizedBox(
+                width: 18, height: 18,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Color(0xFFE53935)),
+              ),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text('Зураг upload хийж байна...',
+                    style: TextStyle(color: Colors.white, fontSize: 14)),
+              ),
+            ],
+          ),
+          content: ValueListenableBuilder<int>(
+            valueListenable: progress,
+            builder: (_, done, __) => Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                LinearProgressIndicator(
+                  value: done / total,
+                  color: const Color(0xFFE53935),
+                  backgroundColor: const Color(0xFF2A2A2A),
+                  minHeight: 6,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                const SizedBox(height: 14),
+                Text('$done / $total',
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+                const Text('зураг upload хийгдлээ',
+                    style: TextStyle(
+                        color: Colors.grey, fontSize: 12)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final errors = <String>[];
+
+    for (final doc in toMigrate) {
+      final data     = doc.data();
+      final assetUrl = data['imageUrl'] as String? ?? '';
+      try {
+        // Load asset — 10 sec timeout
+        final mainBytes = await rootBundle
+            .load(assetUrl)
+            .timeout(const Duration(seconds: 10));
+
+        // Upload to Storage — 45 sec timeout per image
+        final mainRef = FirebaseStorage.instance
+            .ref('products/${doc.id}/main.jpg');
+        await mainRef
+            .putData(mainBytes.buffer.asUint8List(),
+                SettableMetadata(contentType: 'image/jpeg'))
+            .timeout(const Duration(seconds: 45));
+        final mainUrl = await mainRef.getDownloadURL()
+            .timeout(const Duration(seconds: 10));
+
+        // Extra images (hoodie 2nd image)
+        final rawImages = (data['images'] as List?)?.cast<String>() ?? [];
+        final uploadedExtra = <String>[];
+        for (int i = 0; i < rawImages.length; i++) {
+          final extra = rawImages[i];
+          if (extra.startsWith('assets/')) {
+            final bytes    = await rootBundle.load(extra)
+                .timeout(const Duration(seconds: 10));
+            final extraRef = FirebaseStorage.instance
+                .ref('products/${doc.id}/image_$i.jpg');
+            await extraRef
+                .putData(bytes.buffer.asUint8List(),
+                    SettableMetadata(contentType: 'image/jpeg'))
+                .timeout(const Duration(seconds: 45));
+            uploadedExtra.add(await extraRef.getDownloadURL()
+                .timeout(const Duration(seconds: 10)));
+          } else {
+            uploadedExtra.add(extra);
+          }
+        }
+
+        // Update Firestore
+        final update = <String, dynamic>{'imageUrl': mainUrl};
+        if (uploadedExtra.isNotEmpty) update['images'] = uploadedExtra;
+        await col.doc(doc.id).update(update)
+            .timeout(const Duration(seconds: 10));
+        success++;
+      } catch (e) {
+        errors.add('${doc.id}: $e');
+      }
+      progress.value++; // always increments — drives dialog
+    }
+
+    progress.dispose();
+    if (!mounted) return;
+    Navigator.pop(context); // close dialog
+
+    if (errors.isNotEmpty) {
+      // Show first error to diagnose
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          backgroundColor: const Color(0xFF1E1E1E),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14)),
+          title: Text('$success/$total амжилттай',
+              style: const TextStyle(color: Colors.white)),
+          content: SingleChildScrollView(
+            child: Text(
+              errors.take(3).join('\n\n'),
+              style: const TextStyle(color: Colors.red, fontSize: 11),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK',
+                  style: TextStyle(color: Color(0xFFE53935))),
+            ),
+          ],
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+            '$total зураг бүгд амжилттай! Одоо assets/images/ устгаж болно.'),
+        backgroundColor: Colors.green,
+        duration: const Duration(seconds: 5),
+      ));
+    }
+  }
 
   void _confirm({
     required String title,
@@ -218,6 +408,7 @@ class _AdminScreenState extends State<AdminScreen>
             Tab(icon: Icon(Icons.list_alt_rounded, size: 18), text: 'Захиалга'),
             Tab(icon: Icon(Icons.local_shipping_rounded, size: 18), text: 'Хүргэлт'),
             Tab(icon: Icon(Icons.people_rounded, size: 18), text: 'Хэрэглэгчид'),
+            Tab(icon: Icon(Icons.inventory_2_rounded, size: 18), text: 'Бараа'),
             Tab(icon: Icon(Icons.chat_rounded, size: 18), text: 'Чат'),
           ],
         ),
@@ -228,8 +419,23 @@ class _AdminScreenState extends State<AdminScreen>
           _buildOrdersTab(),
           _buildDeliveryTab(),
           _buildUsersTab(),
+          _buildProductsTab(),
           _buildChatTab(),
         ],
+      ),
+      floatingActionButton: ListenableBuilder(
+        listenable: _tabCtrl,
+        builder: (_, __) => _tabCtrl.index == 3
+            ? FloatingActionButton(
+                backgroundColor: const Color(0xFFE53935),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const AdminProductFormScreen()),
+                ),
+                child: const Icon(Icons.add_rounded, color: Colors.white),
+              )
+            : const SizedBox.shrink(),
       ),
     );
   }
@@ -256,17 +462,23 @@ class _AdminScreenState extends State<AdminScreen>
         }
 
         final allDocs = snap.data?.docs ?? [];
-        final visible = allDocs
+
+        // Only show orders of the currently selected month
+        final monthDocs = allDocs
+            .where((d) =>
+                (d.data() as Map<String, dynamic>)['month'] == _revenueMonth)
+            .toList();
+
+        final visible = monthDocs
             .where((d) => (d.data() as Map)['hidden'] != true)
             .toList();
 
         // Revenue for selected month (accepted, including hidden)
         int revenue = 0;
         int revenueCount = 0;
-        for (final d in allDocs) {
+        for (final d in monthDocs) {
           final data = d.data() as Map<String, dynamic>;
-          if (data['status'] == 'accepted' &&
-              data['month'] == _revenueMonth) {
+          if (data['status'] == 'accepted') {
             revenue += (data['totalAmount'] as num?)?.toInt() ?? 0;
             revenueCount++;
           }
@@ -294,6 +506,29 @@ class _AdminScreenState extends State<AdminScreen>
         return Column(
           children: [
             _buildRevenueCard(revenue, revenueCount),
+            // Month label for order list
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: Row(
+                children: [
+                  const Icon(Icons.calendar_month_rounded,
+                      color: Colors.grey, size: 14),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${_monthLabel(_revenueMonth)}-н захиалгууд',
+                    style: const TextStyle(
+                        color: Colors.grey,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500),
+                  ),
+                  const Spacer(),
+                  Text('${visible.length} захиалга',
+                      style: const TextStyle(
+                          color: Colors.grey, fontSize: 11)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 4),
             _buildFilterBar(visible),
             Expanded(
               child: filtered.isEmpty
@@ -465,27 +700,31 @@ class _AdminScreenState extends State<AdminScreen>
                 const SizedBox(height: 6),
 
                 // Items
-                ...items.map((item) => Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.checkroom_outlined,
-                              color: Colors.grey, size: 14),
-                          const SizedBox(width: 6),
-                          Expanded(
-                              child: Text(
-                                  item['name'] ?? '',
-                                  style: const TextStyle(
-                                      color: Colors.white70,
-                                      fontSize: 13),
-                                  overflow: TextOverflow.ellipsis)),
-                          Text(
-                              '${_fmt((item['priceMNT'] as num?)?.toInt() ?? 0)}₮',
-                              style: const TextStyle(
-                                  color: Colors.white60, fontSize: 12)),
-                        ],
-                      ),
-                    )),
+                ...items.map((item) {
+                      final itemName = item['name'] as String? ?? '';
+                      final itemSize = item['size'] as String? ?? '';
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.checkroom_outlined,
+                                color: Colors.grey, size: 14),
+                            const SizedBox(width: 6),
+                            Expanded(
+                                child: Text(
+                                    itemSize.isNotEmpty ? '$itemName · $itemSize' : itemName,
+                                    style: const TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 13),
+                                    overflow: TextOverflow.ellipsis)),
+                            Text(
+                                '${_fmt((item['priceMNT'] as num?)?.toInt() ?? 0)}₮',
+                                style: const TextStyle(
+                                    color: Colors.white60, fontSize: 12)),
+                          ],
+                        ),
+                      );
+                    }),
 
                 const SizedBox(height: 8),
                 Row(
@@ -760,7 +999,172 @@ class _AdminScreenState extends State<AdminScreen>
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // TAB 3 — Chat
+  // TAB 3 — Products
+  // ══════════════════════════════════════════════════════════════════════════
+
+  Widget _buildProductsTab() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('products')
+          .snapshots(),
+      builder: (_, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Center(
+              child: CircularProgressIndicator(color: Color(0xFFE53935)));
+        }
+        final docs = snap.data?.docs ?? [];
+        if (docs.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.inventory_2_outlined,
+                    color: Colors.grey, size: 64),
+                const SizedBox(height: 16),
+                const Text('Бараа байхгүй байна',
+                    style: TextStyle(color: Colors.grey, fontSize: 16)),
+                const SizedBox(height: 8),
+                const Text(
+                  'Доорх товчийг дарж 25 бараа бүгдийг нэмэх',
+                  style: TextStyle(color: Color(0xFF555555), fontSize: 12),
+                ),
+                const SizedBox(height: 20),
+                // ── Seed all 25 products ──
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFE53935),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () async {
+                    try {
+                      await seedAllProducts();
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('25 бараа амжилттай нэмэгдлээ!'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Алдаа: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.upload_rounded, color: Colors.white),
+                  label: const Text('Бүх 25 бараа нэмэх',
+                      style: TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFF3A3A3A)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const AdminProductFormScreen()),
+                  ),
+                  icon: const Icon(Icons.add_rounded,
+                      color: Colors.grey, size: 18),
+                  label: const Text('Нэг бараа нэмэх',
+                      style: TextStyle(color: Colors.grey)),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final products = docs
+            .map((d) => Product.fromFirestore(d))
+            .toList();
+
+        return ListView.builder(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+          itemCount: products.length + 1,
+          itemBuilder: (_, i) {
+            if (i == 0) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Row(
+                  children: [
+                    Text('${products.length} бараа',
+                        style: const TextStyle(
+                            color: Colors.grey, fontSize: 13)),
+                    const Spacer(),
+                    Row(
+                      children: [
+                        if (products.length < 25)
+                          _headerBtn(
+                            icon: Icons.library_add_rounded,
+                            label: 'Бараа нэмэх',
+                            color: const Color(0xFFE53935),
+                            onTap: () async {
+                              try { await seedAllProducts(); } catch (_) {}
+                            },
+                          ),
+                        const SizedBox(width: 8),
+                        _headerBtn(
+                          icon: Icons.cloud_upload_rounded,
+                          label: 'Зураг Firebase-д оруулах',
+                          color: Colors.blue,
+                          onTap: _migrateImages,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            }
+            return _buildProductAdminCard(products[i - 1]);
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildProductAdminCard(Product p) => _ProductInventoryCard(
+        product: p,
+        onEdit: () => Navigator.push(context,
+            MaterialPageRoute(
+                builder: (_) => AdminProductFormScreen(product: p))),
+        onToggleActive: () => _toggleProductActive(p),
+        onDelete: () => _confirmDeleteProduct(p),
+      );
+
+  Future<void> _toggleProductActive(Product p) async {
+    await FirebaseFirestore.instance
+        .collection('products')
+        .doc(p.id)
+        .update({'isActive': !p.isActive});
+  }
+
+  void _confirmDeleteProduct(Product p) {
+    _confirm(
+      title: 'Бараа устгах',
+      body: '"${p.name}" барааг устгах уу?',
+      okLabel: 'Устгах',
+      onOk: () => FirebaseFirestore.instance
+          .collection('products')
+          .doc(p.id)
+          .delete(),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // TAB 4 — Chat
   // ══════════════════════════════════════════════════════════════════════════
 
   Widget _buildChatTab() {
@@ -1192,8 +1596,8 @@ class _AdminScreenState extends State<AdminScreen>
                 ...items.map((item) {
                   final name  = item['name'] ?? '';
                   final cat   = item['category'] ?? '';
-                  final price =
-                      (item['priceMNT'] as num?)?.toInt() ?? 0;
+                  final size  = item['size'] as String? ?? '';
+                  final price = (item['priceMNT'] as num?)?.toInt() ?? 0;
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 4),
                     child: Row(
@@ -1203,7 +1607,7 @@ class _AdminScreenState extends State<AdminScreen>
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                              cat.isNotEmpty ? '$name · $cat' : name,
+                              [name, if (cat.isNotEmpty) cat, if (size.isNotEmpty) size].join(' · '),
                               style: const TextStyle(
                                   color: Colors.white70, fontSize: 13),
                               overflow: TextOverflow.ellipsis),
@@ -1343,6 +1747,36 @@ class _AdminScreenState extends State<AdminScreen>
       ),
     );
   }
+
+  Widget _headerBtn({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) =>
+      GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: color.withValues(alpha: 0.4)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: color, size: 13),
+              const SizedBox(width: 4),
+              Text(label,
+                  style: TextStyle(
+                      color: color,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold)),
+            ],
+          ),
+        ),
+      );
 
   Widget _infoRow(IconData icon, String label, String value) =>
       Row(
@@ -1641,4 +2075,357 @@ class _AdminChatDetailScreenState extends State<_AdminChatDetailScreen> {
       ),
     );
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Product Inventory Card (expandable stock view + edit)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ProductInventoryCard extends StatefulWidget {
+  final Product product;
+  final VoidCallback onEdit;
+  final VoidCallback onToggleActive;
+  final VoidCallback onDelete;
+
+  const _ProductInventoryCard({
+    required this.product,
+    required this.onEdit,
+    required this.onToggleActive,
+    required this.onDelete,
+  });
+
+  @override
+  State<_ProductInventoryCard> createState() => _ProductInventoryCardState();
+}
+
+class _ProductInventoryCardState extends State<_ProductInventoryCard> {
+  bool _expanded = false;
+
+  static const List<String> _allSizes = ['S', 'M', 'L', 'XL', 'XXL'];
+
+  Product get p => widget.product;
+
+  int get _totalStock =>
+      p.stock.values.fold(0, (acc, v) => acc + v);
+
+  String _fmt(int v) => v
+      .toString()
+      .replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},');
+
+  // ── Edit stock dialog ────────────────────────────────────────────────────
+
+  void _showEditStock(String size, int current) {
+    final ctrl = TextEditingController(text: current.toString());
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: Text('$size хэмжээний тоо',
+            style: const TextStyle(color: Colors.white, fontSize: 15)),
+        content: TextField(
+          controller: ctrl,
+          keyboardType: TextInputType.number,
+          autofocus: true,
+          style: const TextStyle(color: Colors.white, fontSize: 16),
+          decoration: InputDecoration(
+            suffixText: 'ширхэг',
+            suffixStyle: const TextStyle(color: Colors.grey),
+            filled: true,
+            fillColor: const Color(0xFF2A2A2A),
+            border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide.none),
+            focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(
+                    color: Color(0xFFE53935), width: 1.5)),
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Болих',
+                  style: TextStyle(color: Colors.grey))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE53935),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8))),
+            onPressed: () async {
+              final val = int.tryParse(ctrl.text.trim());
+              if (val == null || val < 0) return;
+              Navigator.pop(ctx);
+              await FirebaseFirestore.instance
+                  .collection('products')
+                  .doc(p.id)
+                  .update({'stock.$size': val});
+            },
+            child: const Text('Хадгалах',
+                style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Build ────────────────────────────────────────────────────────────────
+
+  @override
+  Widget build(BuildContext context) {
+    final priceStr =
+        '${_fmt((p.price * 1000).toInt())}₮';
+    final isSoldOut = _totalStock == 0;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1E1E),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: !p.isActive
+              ? Colors.red.withValues(alpha: 0.35)
+              : isSoldOut
+                  ? Colors.orange.withValues(alpha: 0.35)
+                  : const Color(0xFF2A2A2A),
+        ),
+      ),
+      child: Column(
+        children: [
+          // ── Main row ──────────────────────────────────────────────────
+          InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
+            borderRadius: BorderRadius.circular(14),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(0, 0, 8, 0),
+              child: Row(
+                children: [
+                  // Thumbnail
+                  ClipRRect(
+                    borderRadius: const BorderRadius.horizontal(
+                        left: Radius.circular(14)),
+                    child: SizedBox(
+                      width: 80,
+                      height: 80,
+                      child: p.isNetworkImage
+                          ? CachedNetworkImage(
+                              imageUrl: p.imageUrl,
+                              fit: BoxFit.cover,
+                              placeholder: (_, __) => const Center(
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Color(0xFFE53935))),
+                              errorWidget: (_, __, ___) => const Center(
+                                  child: Icon(Icons.checkroom_outlined,
+                                      color: Colors.grey, size: 28)))
+                          : p.imageUrl.isNotEmpty
+                              ? Image.asset(p.imageUrl,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => const Center(
+                                      child: Icon(Icons.checkroom_outlined,
+                                          color: Colors.grey, size: 28)))
+                              : const Center(
+                                  child: Icon(Icons.checkroom_outlined,
+                                      color: Colors.grey, size: 28)),
+                    ),
+                  ),
+
+                  const SizedBox(width: 10),
+
+                  // Info
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(p.name,
+                                  style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis),
+                            ),
+                            if (!p.isActive)
+                              _badge('Идэвхгүй', Colors.red)
+                            else if (isSoldOut)
+                              _badge('Дууссан', Colors.orange),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(p.category,
+                            style: const TextStyle(
+                                color: Colors.grey, fontSize: 11)),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Text(priceStr,
+                                style: const TextStyle(
+                                    color: Color(0xFFE53935),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13)),
+                            const Spacer(),
+                            // Total stock badge
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: isSoldOut
+                                    ? Colors.orange.withValues(alpha: 0.15)
+                                    : const Color(0xFF2A2A2A),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: isSoldOut
+                                      ? Colors.orange.withValues(alpha: 0.4)
+                                      : const Color(0xFF3A3A3A),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.inventory_2_outlined,
+                                      size: 11,
+                                      color: isSoldOut
+                                          ? Colors.orange
+                                          : Colors.grey),
+                                  const SizedBox(width: 4),
+                                  Text('$_totalStock ширхэг',
+                                      style: TextStyle(
+                                          color: isSoldOut
+                                              ? Colors.orange
+                                              : Colors.white,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Action buttons
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _iconBtn(Icons.edit_rounded, Colors.white70,
+                          widget.onEdit),
+                      _iconBtn(
+                        p.isActive
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                        Colors.grey,
+                        widget.onToggleActive,
+                      ),
+                      _iconBtn(Icons.delete_outline_rounded,
+                          Colors.redAccent, widget.onDelete),
+                    ],
+                  ),
+
+                  Icon(
+                    _expanded
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.keyboard_arrow_down_rounded,
+                    color: Colors.grey,
+                    size: 20,
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // ── Expanded stock breakdown ──────────────────────────────────
+          if (_expanded) ...[
+            const Divider(color: Color(0xFF2A2A2A), height: 1),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Хэмжээ тус бүрийн үлдэгдэл',
+                      style: TextStyle(
+                          color: Colors.grey,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: _allSizes.map((size) {
+                      final qty = p.stock[size] ?? 0;
+                      final isEmpty = qty == 0;
+                      return Expanded(
+                        child: GestureDetector(
+                          onTap: () => _showEditStock(size, qty),
+                          child: Container(
+                            margin: const EdgeInsets.only(right: 6),
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            decoration: BoxDecoration(
+                              color: isEmpty
+                                  ? Colors.red.withValues(alpha: 0.08)
+                                  : const Color(0xFF2A2A2A),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: isEmpty
+                                    ? Colors.red.withValues(alpha: 0.4)
+                                    : const Color(0xFF3A3A3A),
+                              ),
+                            ),
+                            child: Column(
+                              children: [
+                                Text(size,
+                                    style: TextStyle(
+                                        color: isEmpty
+                                            ? Colors.red[300]
+                                            : Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12)),
+                                const SizedBox(height: 4),
+                                Text('$qty',
+                                    style: TextStyle(
+                                        color: isEmpty
+                                            ? Colors.red
+                                            : const Color(0xFFE53935),
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 16)),
+                                const SizedBox(height: 2),
+                                Icon(Icons.edit_rounded,
+                                    color: Colors.grey[700], size: 10),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text('Дарж тоог өөрчлөх боломжтой',
+                      style: TextStyle(color: Color(0xFF444444), fontSize: 10)),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _badge(String label, Color color) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(label,
+            style: TextStyle(
+                color: color, fontSize: 10, fontWeight: FontWeight.bold)),
+      );
+
+  Widget _iconBtn(IconData icon, Color color, VoidCallback onTap) =>
+      IconButton(
+          icon: Icon(icon, color: color, size: 18),
+          onPressed: onTap,
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.all(4));
 }

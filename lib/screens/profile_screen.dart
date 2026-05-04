@@ -15,13 +15,14 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.c;
     final user = FirebaseAuth.instance.currentUser;
     final name = user?.displayName ?? 'Хэрэглэгч';
     final email = user?.email ?? '';
     final initial = name.isNotEmpty ? name[0].toUpperCase() : 'U';
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: c.background,
       appBar: AppBar(title: const Text('Профайл')),
       body: SingleChildScrollView(
         child: Column(
@@ -30,8 +31,8 @@ class ProfileScreen extends StatelessWidget {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(20, 30, 20, 30),
-              decoration: const BoxDecoration(
-                color: AppTheme.surface,
+              decoration: BoxDecoration(
+                color: c.surface,
                 borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
               ),
               child: Column(
@@ -41,10 +42,10 @@ class ProfileScreen extends StatelessWidget {
                     height: 88,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: AppTheme.primary,
+                      color: c.primary,
                       boxShadow: [
                         BoxShadow(
-                            color: AppTheme.primary.withValues(alpha: 0.3),
+                            color: c.primary.withValues(alpha: 0.3),
                             blurRadius: 16,
                             offset: const Offset(0, 6))
                       ],
@@ -57,29 +58,29 @@ class ProfileScreen extends StatelessWidget {
                               fontWeight: FontWeight.w800)),
                     ),
                   ),
-                  const SizedBox(height: 14),
+                  SizedBox(height: 14),
                   Text(name,
-                      style: const TextStyle(
-                          color: AppTheme.textPrimary,
+                      style: TextStyle(
+                          color: c.textPrimary,
                           fontSize: 20,
                           fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 4),
+                  SizedBox(height: 4),
                   Text(email,
-                      style: const TextStyle(
-                          color: AppTheme.textSecondary, fontSize: 13)),
-                  const SizedBox(height: 16),
+                      style: TextStyle(
+                          color: c.textSecondary, fontSize: 13)),
+                  SizedBox(height: 16),
                   Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
-                      color: AppTheme.primary.withValues(alpha: 0.08),
+                      color: c.primary.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
-                          color: AppTheme.primary.withValues(alpha: 0.2)),
+                          color: c.primary.withValues(alpha: 0.2)),
                     ),
-                    child: const Text('Anime Store Member',
+                    child: Text('Anime Store Member',
                         style: TextStyle(
-                            color: AppTheme.primary,
+                            color: c.primary,
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 0.5)),
@@ -96,8 +97,9 @@ class ProfileScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _sectionLabel('Захиалга'),
+                  _sectionLabel('Захиалга', c),
                   _menuItem(
+                    c: c,
                     icon: Icons.shopping_bag_outlined,
                     title: 'Миний захиалгууд',
                     subtitle: 'Захиалгын түүх харах',
@@ -109,8 +111,9 @@ class ProfileScreen extends StatelessWidget {
                   ),
 
                   const SizedBox(height: 16),
-                  _sectionLabel('Тохиргоо'),
+                  _sectionLabel('Тохиргоо', c),
                   _menuItem(
+                    c: c,
                     icon: Icons.person_outline_rounded,
                     title: 'Профайл засах',
                     subtitle: 'Нэр, мэдээлэл өөрчлөх',
@@ -119,6 +122,7 @@ class ProfileScreen extends StatelessWidget {
                             builder: (_) => const EditProfileScreen())),
                   ),
                   _menuItem(
+                    c: c,
                     icon: Icons.location_on_outlined,
                     title: 'Хүргэлтийн хаяг',
                     subtitle: 'Хаяг нэмэх, засах',
@@ -127,6 +131,7 @@ class ProfileScreen extends StatelessWidget {
                             builder: (_) => const DeliveryAddressScreen())),
                   ),
                   _menuItem(
+                    c: c,
                     icon: Icons.notifications_outlined,
                     title: 'Мэдэгдэл',
                     subtitle: 'Мэдэгдлийн тохиргоо',
@@ -136,8 +141,9 @@ class ProfileScreen extends StatelessWidget {
                   ),
 
                   const SizedBox(height: 16),
-                  _sectionLabel('Тусламж'),
+                  _sectionLabel('Тусламж', c),
                   _menuItem(
+                    c: c,
                     icon: Icons.support_agent_outlined,
                     title: 'Тусламж & Дэмжлэг',
                     subtitle: 'Асуулт, санал хүсэлт — Admin-тай чат',
@@ -146,6 +152,7 @@ class ProfileScreen extends StatelessWidget {
                             builder: (_) => const SupportChatScreen())),
                   ),
                   _menuItem(
+                    c: c,
                     icon: Icons.info_outline_rounded,
                     title: 'Апп-ын тухай',
                     subtitle: 'Хувилбар 1.0.0 · Anime Store',
@@ -158,25 +165,25 @@ class ProfileScreen extends StatelessWidget {
 
                   // Sign out
                   GestureDetector(
-                    onTap: () => _confirmSignOut(context),
+                    onTap: () => _confirmSignOut(context, c),
                     child: Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       decoration: BoxDecoration(
-                        color: AppTheme.primary.withValues(alpha: 0.06),
+                        color: c.primary.withValues(alpha: 0.06),
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
-                            color: AppTheme.primary.withValues(alpha: 0.2)),
+                            color: c.primary.withValues(alpha: 0.2)),
                       ),
-                      child: const Row(
+                      child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(Icons.logout_rounded,
-                              color: AppTheme.primary, size: 20),
+                              color: c.primary, size: 20),
                           SizedBox(width: 10),
                           Text('Гарах',
                               style: TextStyle(
-                                  color: AppTheme.primary,
+                                  color: c.primary,
                                   fontSize: 15,
                                   fontWeight: FontWeight.w700)),
                         ],
@@ -193,26 +200,26 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  void _confirmSignOut(BuildContext context) {
+  void _confirmSignOut(BuildContext context, AppColors c) {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        backgroundColor: AppTheme.surface,
+        backgroundColor: c.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Гарах уу?',
+        title: Text('Гарах уу?',
             style: TextStyle(
-                color: AppTheme.textPrimary, fontWeight: FontWeight.w700)),
-        content: const Text('Та акаунтаасаа гарах гэж байна.',
-            style: TextStyle(color: AppTheme.textSecondary)),
+                color: c.textPrimary, fontWeight: FontWeight.w700)),
+        content: Text('Та акаунтаасаа гарах гэж байна.',
+            style: TextStyle(color: c.textSecondary)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Болих',
-                style: TextStyle(color: AppTheme.textSecondary)),
+            child: Text('Болих',
+                style: TextStyle(color: c.textSecondary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primary,
+                backgroundColor: c.primary,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8))),
             onPressed: () {
@@ -227,17 +234,18 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _sectionLabel(String label) => Padding(
+  Widget _sectionLabel(String label, AppColors c) => Padding(
         padding: const EdgeInsets.only(bottom: 8),
         child: Text(label,
-            style: const TextStyle(
-                color: AppTheme.textSecondary,
+            style: TextStyle(
+                color: c.textSecondary,
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
                 letterSpacing: 0.5)),
       );
 
   Widget _menuItem({
+    required AppColors c,
     required IconData icon,
     required String title,
     required String subtitle,
@@ -250,7 +258,7 @@ class ProfileScreen extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: AppTheme.surface,
+          color: c.surface,
           borderRadius: BorderRadius.circular(14),
           boxShadow: [
             BoxShadow(
@@ -265,31 +273,31 @@ class ProfileScreen extends StatelessWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: AppTheme.primary.withValues(alpha: 0.08),
+                color: c.primary.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(icon, color: AppTheme.primary, size: 20),
+              child: Icon(icon, color: c.primary, size: 20),
             ),
-            const SizedBox(width: 14),
+            SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(title,
-                      style: const TextStyle(
-                          color: AppTheme.textPrimary,
+                      style: TextStyle(
+                          color: c.textPrimary,
                           fontSize: 14,
                           fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 2),
+                  SizedBox(height: 2),
                   Text(subtitle,
-                      style: const TextStyle(
-                          color: AppTheme.textSecondary, fontSize: 11)),
+                      style: TextStyle(
+                          color: c.textSecondary, fontSize: 11)),
                 ],
               ),
             ),
             if (showArrow)
-              const Icon(Icons.arrow_forward_ios_rounded,
-                  color: AppTheme.textSecondary, size: 14),
+              Icon(Icons.arrow_forward_ios_rounded,
+                  color: c.textSecondary, size: 14),
           ],
         ),
       ),

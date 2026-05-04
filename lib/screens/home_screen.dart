@@ -1,6 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../utils/product_seed.dart';
 import '../models/product.dart';
 import '../utils/app_theme.dart';
 import '../widgets/product_card.dart';
@@ -18,10 +22,175 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  AppColors c = AppColors.light;
   int _selectedIndex = 0;
   final List<Product> _cartItems = [];
   String _searchQuery = '';
   String _selectedCategory = 'All';
+
+  List<Product> _products = [];
+  StreamSubscription<QuerySnapshot>? _productSub;
+  bool _cartLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _seedAndListen();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _showWelcomeIfNeeded());
+  }
+
+  Future<void> _showWelcomeIfNeeded() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
+    final prefs = await SharedPreferences.getInstance();
+    final shown = prefs.getBool('welcome_$uid') ?? false;
+    if (shown || !mounted) return;
+    await prefs.setBool('welcome_$uid', true);
+
+    final name = FirebaseAuth.instance.currentUser?.displayName ?? '';
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: c.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 72, height: 72,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: c.primary.withValues(alpha: 0.1),
+              ),
+              child: ClipOval(
+                child: Image.asset('assets/images/logo.png',
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) =>
+                        Icon(Icons.storefront_rounded,
+                            color: c.primary, size: 40)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              name.isNotEmpty ? 'Сайн байна уу,\n$name!' : 'Сайн байна уу!',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  color: c.textPrimary,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  height: 1.3),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Аниме фэшн дэлгүүрт тавтай морил 🎉',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: c.textSecondary, fontSize: 13),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: c.primary,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Бараа үзэх',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _productSub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _seedAndListen() async {
+    final col = FirebaseFirestore.instance.collection('products');
+    final snap = await col.limit(1).get();
+    if (snap.docs.isEmpty) {
+      await seedAllProducts();
+    } else {
+      final d = snap.docs.first.data();
+      if (!d.containsKey('stock')) await _migrateStock(col);
+    }
+    _productSub = col.snapshots().listen((s) {
+      if (!mounted) return;
+      final all = s.docs.map((d) => Product.fromFirestore(d)).toList()
+        ..sort((a, b) =>
+            (int.tryParse(a.id) ?? 9999)
+                .compareTo(int.tryParse(b.id) ?? 9999));
+      setState(() => _products = all.where((p) => p.isActive).toList());
+      if (!_cartLoaded && _products.isNotEmpty) {
+        _cartLoaded = true;
+        _loadCart();
+      }
+    });
+  }
+
+  // ─── Cart persistence ────────────────────────────────────────────────────
+
+  Future<void> _saveCart() async {
+    final prefs = await SharedPreferences.getInstance();
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
+    final data = _cartItems
+        .map((p) => '${p.id}|${p.selectedSize ?? 'M'}')
+        .toList();
+    await prefs.setStringList('cart_$uid', data);
+  }
+
+  Future<void> _loadCart() async {
+    final prefs = await SharedPreferences.getInstance();
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
+    final data = prefs.getStringList('cart_$uid') ?? [];
+    if (data.isEmpty) return;
+    final items = <Product>[];
+    for (final entry in data) {
+      final idx = entry.indexOf('|');
+      if (idx < 0) continue;
+      final id   = entry.substring(0, idx);
+      final size = entry.substring(idx + 1);
+      try {
+        final product = _products.firstWhere((p) => p.id == id);
+        items.add(product.withSize(size));
+      } catch (_) {}
+    }
+    if (items.isNotEmpty && mounted) {
+      setState(() => _cartItems.addAll(items));
+    }
+  }
+
+  static const _tStock = {'S': 8, 'M': 14, 'L': 12, 'XL': 10, 'XXL': 6};
+  static const _hStock = {'S': 5, 'M': 10, 'L': 8,  'XL': 7,  'XXL': 4};
+
+  Future<void> _migrateStock(CollectionReference col) async {
+    final snap  = await col.get();
+    final batch = FirebaseFirestore.instance.batch();
+    for (final doc in snap.docs) {
+      final d = doc.data() as Map<String, dynamic>;
+      if (!d.containsKey('stock')) {
+        final price = (d['price'] as num?)?.toDouble() ?? 0;
+        final stock = price >= 69.0 ? _hStock : _tStock;
+        batch.update(doc.reference, {
+          'stock':          stock,
+          'availableSizes': stock.keys.toList(),
+          'isActive':       d['isActive'] ?? true,
+        });
+      }
+    }
+    await batch.commit();
+  }
 
   final List<String> _categories = [
     'All', 'Demon Slayer', 'Bleach', 'Chainsaw Man', 'Attack on Titan',
@@ -44,74 +213,37 @@ class _HomeScreenState extends State<HomeScreen> {
     'Hoodie':         Color(0xFF5D4037),
   };
 
-  final List<Product> _allProducts = [
-  Product(id:'1', name:'Upper Moon One - Kokushibo', category:'Demon Slayer', price:39.0,
-    imageUrl:'assets/images/product_1.png',
-    rating:5.0, description:'Kokushibo - Upper Moon One t-shirt. Black acid wash oversized. Front: crescent moon. Back: 6-eyed butterfly with katana.'),
-  Product(id:'2', name:'KON - Bleach', category:'Bleach', price:39.0,
-    imageUrl:'assets/images/product_2.png',
-    rating:5.0, description:'Kon (Modified Soul) t-shirt from Bleach. Black acid wash oversized.'),
-  Product(id:'3', name:'Denji - Chainsaw Man', category:'Chainsaw Man', price:39.0,
-    imageUrl:'assets/images/product_3.png',
-    rating:5.0, description:'Denji / Chainsaw Man t-shirt. Black acid wash oversized. "DENJI / chainsaw man /" print.'),
-  Product(id:'4', name:'Phantom Troupe - HxH', category:'Hunter x Hunter', price:39.0,
-    imageUrl:'assets/images/product_4.png',
-    rating:5.0, description:'Chrollo Lucilfer - Phantom Troupe from Hunter x Hunter. White acid wash oversized. Front & back design.'),
-  Product(id:'5', name:'Upper Moon Two - Doma', category:'Demon Slayer', price:39.0,
-    imageUrl:'assets/images/product_5.png',
-    rating:5.0, description:'Doma - Upper Moon Two t-shirt from Demon Slayer. Black acid wash oversized. Crescent moon with sword design.'),
-  Product(id:'6', name:'Muichiro Tokito', category:'Demon Slayer', price:39.0,
-    imageUrl:'assets/images/product_6.png',
-    rating:5.0, description:'Muichiro Tokito t-shirt from Demon Slayer. Black acid wash oversized. Front: butterfly cross. Back: Muichiro with katana.'),
-  Product(id:'7', name:'Flame Hashira Rengoku', category:'Demon Slayer', price:39.0,
-    imageUrl:'assets/images/product_7.png',
-    rating:5.0, description:'Rengoku Kyojuro t-shirt from Kimetsu no Yaiba. Beige acid wash oversized. Front: small bird. Back: Rengoku with red sun.'),
-  Product(id:'8', name:'Solo Leveling - ARISE', category:'Solo Leveling', price:39.0,
-    imageUrl:'assets/images/product_8.png',
-    rating:5.0, description:'Solo Leveling ARISE t-shirt. Gray acid wash oversized. Front: sword. Back: Beast Monarch "ARISE" print.'),
-  Product(id:'9', name:'Toji Fushiguro', category:'Jujutsu Kaisen', price:39.0,
-    imageUrl:'assets/images/product_9.png',
-    rating:5.0, description:'Toji Fushiguro t-shirt from Jujutsu Kaisen. Black oversized. Character with chains and scythe design.'),
-  Product(id:'10', name:'Gojo & Geto', category:'Jujutsu Kaisen', price:39.0,
-    imageUrl:'assets/images/product_10.png',
-    rating:5.0, description:'Satoru Gojo & Suguru Geto t-shirt from Jujutsu Kaisen. Black acid wash oversized. Koi fish motif with "SATORU SUGURU" text.'),
-  Product(id:'11', name:'Attack on Titan - Titans', category:'Attack on Titan', price:39.0,
-    imageUrl:'assets/images/product_11.png',
-    rating:5.0, description:'Attack on Titan multi-titan collage t-shirt. Black acid wash oversized. Front: Scout Regiment emblem. Back: titans art.'),
-  Product(id:'12', name:'Eren Yeager - Attack Titan', category:'Attack on Titan', price:39.0,
-    imageUrl:'assets/images/product_12.png',
-    rating:5.0, description:'Eren Yeager Attack Titan t-shirt. Black acid wash oversized. Front: Scout emblem. Back: Eren titan emerging.'),
-  Product(id:'13', name:'Vasto Lorde - Bleach', category:'Bleach', price:39.0,
-    imageUrl:'assets/images/product_13.png',
-    rating:5.0, description:'Vasto Lorde Hollow (最上大虚) t-shirt from Bleach. Beige oversized. Large demon with horns front print.'),
-  Product(id:'14', name:'Solo Leveling - Igris Dragon', category:'Solo Leveling', price:39.0,
-    imageUrl:'assets/images/product_14.png',
-    rating:5.0, description:'Solo Leveling character with purple flame dragon t-shirt. Black acid wash oversized. Front & back design.'),
-  Product(id:'15', name:'Jujutsu Kaisen Characters', category:'Jujutsu Kaisen', price:39.0,
-    imageUrl:'assets/images/product_15.png',
-    rating:5.0, description:'Jujutsu Kaisen multi-character t-shirt. White oversized. Pink/magenta design with multiple JJK characters.'),
-  Product(id:'16', name:'Dr. Stone - Senku', category:'Dr. Stone', price:39.0,
-    imageUrl:'assets/images/product_16.png',
-    rating:5.0, description:'Senku Ishigami t-shirt from Dr. Stone. Olive green acid wash oversized. Senku breaking from stone print.'),
-  Product(id:'17', name:'Sukuna Demon', category:'Jujutsu Kaisen', price:39.0,
-    imageUrl:'assets/images/product_17.png',
-    rating:5.0, description:'Ryomen Sukuna t-shirt from Jujutsu Kaisen. Black acid wash oversized. Red demon face with dripping moon design.'),
-];
+  static const Map<String, String> _categoryImages = {
+    'All':            'assets/images/logo.png',
+    'Demon Slayer':   'assets/images/cat_demon_slayer.png',
+    'Bleach':         'assets/images/cat_bleach.png',
+    'Chainsaw Man':   'assets/images/cat_chainsaw_man.png',
+    'Attack on Titan':'assets/images/cat_attack_on_titan.png',
+    'Hunter x Hunter':'assets/images/cat_hunter_x_hunter.png',
+    'Jujutsu Kaisen': 'assets/images/cat_jujutsu_kaisen.png',
+    'Solo Leveling':  'assets/images/cat_solo_leveling.png',
+    'Kaiju 8':        'assets/images/cat_kaiju_8.png',
+    'Dr. Stone':      'assets/images/cat_dr_stone.png',
+    'Mashle':         'assets/images/cat_mashle.png',
+    'Hoodie':         'assets/images/cat_hoodie.png',
+  };
+
 
   List<Product> get _filteredProducts {
-    return _allProducts.where((p) {
+    return _products.where((p) {
       final matchCategory = _selectedCategory == 'All' || p.category == _selectedCategory;
       final matchSearch = p.name.toLowerCase().contains(_searchQuery.toLowerCase());
       return matchCategory && matchSearch;
     }).toList();
   }
 
-  void _addToCart(Product product) {
-    setState(() => _cartItems.add(product));
+  void _addToCart(Product product, String size) {
+    setState(() => _cartItems.add(product.withSize(size)));
+    _saveCart();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('${product.name} сагсанд нэмлээ'),
-        backgroundColor: AppTheme.primary,
+        content: Text('${product.name} ($size) сагсанд нэмлээ'),
+        backgroundColor: c.primary,
         duration: const Duration(seconds: 1),
       ),
     );
@@ -119,9 +251,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _removeFromCart(int index) {
     setState(() => _cartItems.removeAt(index));
+    _saveCart();
   }
 
   void _signOut() async {
+    final prefs = await SharedPreferences.getInstance();
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
+    await prefs.remove('cart_$uid');
     await FirebaseAuth.instance.signOut();
     if (!mounted) return;
     Navigator.pushReplacement(
@@ -139,28 +275,22 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Сайн байна уу, ${FirebaseAuth.instance.currentUser?.displayName ?? 'Guest'}!',
-                style: const TextStyle(color: AppTheme.textPrimary, fontSize: 22, fontWeight: FontWeight.bold),
-              ),
-              const Text('Аниме фэшн дэлгүүрт тавтай морил',
-                style: TextStyle(color: AppTheme.textSecondary, fontSize: 14)),
-              const SizedBox(height: 16),
+              const SizedBox(height: 4),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
-                  color: AppTheme.surface,
+                  color: c.surface,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppTheme.border),
+                  border: Border.all(color: c.border),
                 ),
                 child: TextField(
-                  style: const TextStyle(color: AppTheme.textPrimary),
+                  style: TextStyle(color: c.textPrimary),
                   onChanged: (val) => setState(() => _searchQuery = val),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     hintText: 'Бараа хайх...',
-                    hintStyle: TextStyle(color: AppTheme.textSecondary),
+                    hintStyle: TextStyle(color: c.textSecondary),
                     border: InputBorder.none,
-                    icon: Icon(Icons.search, color: AppTheme.primary),
+                    icon: Icon(Icons.search, color: c.primary),
                   ),
                 ),
               ),
@@ -179,9 +309,9 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         _filteredProducts.isEmpty
-          ? const Expanded(
+          ? Expanded(
               child: Center(
-                child: Text('Бараа олдсонгүй', style: TextStyle(color: AppTheme.textSecondary, fontSize: 16)),
+                child: Text('Бараа олдсонгүй', style: TextStyle(color: c.textSecondary, fontSize: 16)),
               ),
             )
           : Expanded(
@@ -194,11 +324,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 itemCount: _filteredProducts.length,
                 itemBuilder: (ctx, i) => ProductCard(
                   product: _filteredProducts[i],
-                  onAddToCart: () => _addToCart(_filteredProducts[i]),
+                  onAddToCart: () => _addToCart(_filteredProducts[i], 'M'),
                   onTap: () => Navigator.push(context,
                     MaterialPageRoute(builder: (_) => ProductDetailScreen(
                       product: _filteredProducts[i],
-                      onAddToCart: () => _addToCart(_filteredProducts[i]),
+                      onAddToCart: (size) => _addToCart(_filteredProducts[i], size),
                     ))),
                 ),
               ),
@@ -209,7 +339,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildCategoryCircle(String cat) {
     final isSelected = _selectedCategory == cat;
-    final color = _categoryColors[cat] ?? AppTheme.primary;
+    final color = _categoryColors[cat] ?? c.primary;
     final label = cat == 'All' ? 'Бүгд' : cat;
 
     return GestureDetector(
@@ -225,29 +355,51 @@ class _HomeScreenState extends State<HomeScreen> {
               height: 64,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: color,
+                color: cat == 'All' ? Colors.white : color,
                 border: isSelected
-                    ? Border.all(color: AppTheme.primary, width: 3)
+                    ? Border.all(color: c.primary, width: 3)
                     : Border.all(color: Colors.transparent, width: 3),
                 boxShadow: isSelected
                     ? [BoxShadow(color: color.withValues(alpha: 0.4), blurRadius: 10, offset: const Offset(0, 4))]
                     : [const BoxShadow(color: Color(0x1A000000), blurRadius: 6, offset: Offset(0, 2))],
               ),
-              child: Center(
-                child: Text(
-                  cat == 'All' ? '✦' : cat.substring(0, 1).toUpperCase(),
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800),
-                ),
-              ),
+              child: _categoryImages.containsKey(cat)
+                  ? ClipOval(
+                      child: Container(
+                        width: 64,
+                        height: 64,
+                        color: Colors.white,
+                        padding: const EdgeInsets.all(6),
+                        child: Image.asset(
+                          _categoryImages[cat]!,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) => Center(
+                            child: Text(
+                              cat == 'All' ? '✦' : cat.substring(0, 1).toUpperCase(),
+                              style: TextStyle(
+                                  color: c.primary,
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w800),
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                  : Center(
+                      child: Text(
+                        cat == 'All' ? '✦' : cat.substring(0, 1).toUpperCase(),
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800),
+                      ),
+                    ),
             ),
-            const SizedBox(height: 6),
+            SizedBox(height: 6),
             Text(
               label,
               style: TextStyle(
-                color: isSelected ? AppTheme.primary : AppTheme.textSecondary,
+                color: isSelected ? c.primary : c.textSecondary,
                 fontSize: 10,
                 fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
               ),
@@ -270,9 +422,9 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Ангилал',
+              Text('Ангилал',
                   style: TextStyle(
-                      color: AppTheme.textPrimary,
+                      color: c.textPrimary,
                       fontSize: 20,
                       fontWeight: FontWeight.w800)),
               const SizedBox(height: 14),
@@ -289,12 +441,12 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         Expanded(
           child: _filteredProducts.isEmpty
-              ? const Center(
+              ? Center(
                   child: Text('Энэ ангилалд бараа байхгүй',
-                      style: TextStyle(color: AppTheme.textSecondary, fontSize: 15)))
+                      style: TextStyle(color: c.textSecondary, fontSize: 15)))
               : GridView.builder(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -306,14 +458,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   itemCount: _filteredProducts.length,
                   itemBuilder: (ctx, i) => ProductCard(
                     product: _filteredProducts[i],
-                    onAddToCart: () => _addToCart(_filteredProducts[i]),
+                    onAddToCart: () => _addToCart(_filteredProducts[i], 'M'),
                     onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(
                             builder: (_) => ProductDetailScreen(
                                   product: _filteredProducts[i],
-                                  onAddToCart: () =>
-                                      _addToCart(_filteredProducts[i]),
+                                  onAddToCart: (size) =>
+                                      _addToCart(_filteredProducts[i], size),
                                 ))),
                   ),
                 ),
@@ -324,7 +476,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    void clearCart() => setState(() => _cartItems.clear());
+    c = context.c;
+    void clearCart() {
+      setState(() => _cartItems.clear());
+      _saveCart();
+    }
 
     final List<Widget> screens = [
       _buildHome(),
@@ -342,7 +498,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final isDark = themeNotifier.isDark;
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: c.background,
       appBar: AppBar(
         leading: Padding(
           padding: const EdgeInsets.only(left: 8),
@@ -353,7 +509,7 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Icon(
                 isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
                 key: ValueKey(isDark),
-                color: isDark ? Colors.amber : AppTheme.textPrimary,
+                color: isDark ? Colors.amber : c.textPrimary,
                 size: 22,
               ),
             ),
@@ -376,14 +532,14 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             const SizedBox(width: 8),
-            const Text('Anime Store'),
+            Text('Anime Store'),
           ],
         ),
         actions: [
           Stack(
             children: [
               IconButton(
-                icon: const Icon(Icons.shopping_bag_outlined, color: AppTheme.textPrimary),
+                icon: Icon(Icons.shopping_bag_outlined, color: c.textPrimary),
                 onPressed: () => Navigator.push(context,
                   MaterialPageRoute(builder: (_) =>
                     CartScreen(
@@ -397,8 +553,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   right: 8, top: 8,
                   child: Container(
                     width: 16, height: 16,
-                    decoration: const BoxDecoration(
-                      color: AppTheme.primary, shape: BoxShape.circle),
+                    decoration: BoxDecoration(
+                      color: c.primary, shape: BoxShape.circle),
                     child: Center(
                       child: Text('${_cartItems.length}',
                         style: const TextStyle(color: Colors.white, fontSize: 10)),
@@ -413,9 +569,9 @@ class _HomeScreenState extends State<HomeScreen> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: (i) => setState(() => _selectedIndex = i),
-        backgroundColor: AppTheme.surface,
-        selectedItemColor: AppTheme.primary,
-        unselectedItemColor: AppTheme.textSecondary,
+        backgroundColor: c.surface,
+        selectedItemColor: c.primary,
+        unselectedItemColor: c.textSecondary,
         type: BottomNavigationBarType.fixed,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: 'Home'),

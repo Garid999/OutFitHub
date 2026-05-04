@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../utils/app_theme.dart';
 import 'home_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -11,16 +12,29 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
+  AppColors c = AppColors.light;
+  final _nameCtrl  = TextEditingController();
   final _emailCtrl = TextEditingController();
-  final _passCtrl = TextEditingController();
-  final _nameCtrl = TextEditingController();
-  bool _obscure = true;
-  bool _isLoading = false;
+  final _passCtrl  = TextEditingController();
+  final _emailFocus = FocusNode();
+  final _passFocus  = FocusNode();
+  bool _obscure    = true;
+  bool _isLoading  = false;
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _emailCtrl.dispose();
+    _passCtrl.dispose();
+    _emailFocus.dispose();
+    _passFocus.dispose();
+    super.dispose();
+  }
 
   Future<void> _register() async {
-    if (_emailCtrl.text.isEmpty || _passCtrl.text.isEmpty || _nameCtrl.text.isEmpty) {
+    if (_nameCtrl.text.isEmpty || _emailCtrl.text.isEmpty || _passCtrl.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill in all fields')),
+        const SnackBar(content: Text('Бүх талбарыг бөглөнө үү')),
       );
       return;
     }
@@ -32,21 +46,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
       await cred.user?.updateDisplayName(_nameCtrl.text.trim());
 
-      // Create Firestore user profile — wrapped so it never blocks navigation
       try {
         final uid = cred.user!.uid;
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(uid)
-            .set({
+        await FirebaseFirestore.instance.collection('users').doc(uid).set({
           'email': _emailCtrl.text.trim(),
           'displayName': _nameCtrl.text.trim(),
           'userDisplayId': 'U-${uid.substring(0, 6).toUpperCase()}',
           'createdAt': FieldValue.serverTimestamp(),
         });
-      } catch (_) {
-        // Firestore failure must not block registration navigation
-      }
+      } catch (_) {}
 
       if (!mounted) return;
       Navigator.pushReplacement(
@@ -54,110 +62,234 @@ class _RegisterScreenState extends State<RegisterScreen> {
         MaterialPageRoute(builder: (_) => const HomeScreen()),
       );
     } on FirebaseAuthException catch (e) {
-      String message = 'An error occurred';
-      if (e.code == 'weak-password') message = 'Password is too weak';
-      if (e.code == 'email-already-in-use') message = 'Email already in use';
-      if (e.code == 'invalid-email') message = 'Invalid email address';
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      final msg = switch (e.code) {
+        'weak-password'       => 'Нууц үг хэтэрхий богино байна (доод тал нь 6 тэмдэгт)',
+        'email-already-in-use' => 'Энэ имэйл хаяг бүртгэлтэй байна',
+        'invalid-email'       => 'Имэйл хаяг буруу байна',
+        _                     => 'Алдаа гарлаа (${e.code})',
+      };
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
+        SnackBar(content: Text(msg), backgroundColor: c.primary),
       );
-    } finally {
+    } catch (_) {
+      if (!mounted) return;
       setState(() => _isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    c = context.c;
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
-      appBar: AppBar(
-        title: const Text('Create Account'),
-        backgroundColor: const Color(0xFF121212),
-      ),
+      backgroundColor: c.background,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 28),
           child: Column(
             children: [
-              const Spacer(),
-              const Text('Join OutfitHub',
-                style: TextStyle(color: Colors.white, fontSize: 24,
-                  fontWeight: FontWeight.bold)),
+              const SizedBox(height: 60),
+
+              // Logo
+              Container(
+                width: 140,
+                height: 140,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white,
+                  border: Border.all(color: c.border, width: 2),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x20000000),
+                      blurRadius: 20,
+                      offset: Offset(0, 6),
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.all(8),
+                child: ClipOval(
+                  child: Image.asset(
+                    'assets/images/logo.png',
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => Container(
+                      color: Colors.white,
+                      child: Center(
+                        child: Text('AS',
+                            style: TextStyle(
+                                color: c.primary,
+                                fontSize: 40,
+                                fontWeight: FontWeight.w900)),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              SizedBox(height: 20),
+              Text('AnimeStore-д бүртгүүлэх',
+                  style: TextStyle(
+                      color: c.textPrimary,
+                      fontSize: 26,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.5)),
+              SizedBox(height: 6),
+              Text('Шинэ бүртгэл үүсгэх',
+                  style: TextStyle(
+                      color: c.textSecondary,
+                      fontSize: 14,
+                      letterSpacing: 0.3)),
+
+              const SizedBox(height: 48),
+
+              // Full Name
+              _label('Бүтэн нэр'),
               const SizedBox(height: 8),
-              const Text('Create your account',
-                style: TextStyle(color: Colors.grey, fontSize: 14)),
-              const Spacer(),
-              Align(alignment: Alignment.centerLeft,
-                child: Text('Full Name', style: TextStyle(color: Colors.grey[400], fontSize: 13))),
-              const SizedBox(height: 6),
-              TextField(
+              _inputField(
                 controller: _nameCtrl,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  prefixIcon: const Icon(Icons.person_outline, color: Color(0xFFE53935)),
-                  hintText: 'Your full name',
-                  hintStyle: TextStyle(color: Colors.grey[600]),
-                  filled: true,
-                  fillColor: const Color(0xFF1E1E1E),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide.none),
-                ),
+                hint: 'Таны бүтэн нэр',
+                icon: Icons.person_outline_rounded,
+                action: TextInputAction.next,
+                onSubmitted: (_) => FocusScope.of(context).requestFocus(_emailFocus),
               ),
-              const SizedBox(height: 16),
-              Align(alignment: Alignment.centerLeft,
-                child: Text('Email', style: TextStyle(color: Colors.grey[400], fontSize: 13))),
-              const SizedBox(height: 6),
-              TextField(
+
+              const SizedBox(height: 20),
+
+              // Email
+              _label('Имэйл хаяг'),
+              const SizedBox(height: 8),
+              _inputField(
                 controller: _emailCtrl,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  prefixIcon: const Icon(Icons.mail_outline, color: Color(0xFFE53935)),
-                  hintText: 'email@example.com',
-                  hintStyle: TextStyle(color: Colors.grey[600]),
-                  filled: true,
-                  fillColor: const Color(0xFF1E1E1E),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide.none),
-                ),
+                hint: 'email@example.com',
+                icon: Icons.mail_outline_rounded,
+                inputType: TextInputType.emailAddress,
+                focusNode: _emailFocus,
+                action: TextInputAction.next,
+                onSubmitted: (_) => FocusScope.of(context).requestFocus(_passFocus),
               ),
-              const SizedBox(height: 16),
-              Align(alignment: Alignment.centerLeft,
-                child: Text('Password', style: TextStyle(color: Colors.grey[400], fontSize: 13))),
-              const SizedBox(height: 6),
+
+              const SizedBox(height: 20),
+
+              // Password
+              _label('Нууц үг'),
+              SizedBox(height: 8),
               TextField(
                 controller: _passCtrl,
+                focusNode: _passFocus,
                 obscureText: _obscure,
-                style: const TextStyle(color: Colors.white),
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) { if (!_isLoading) _register(); },
+                style: TextStyle(color: c.textPrimary, fontSize: 15),
                 decoration: InputDecoration(
-                  prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFFE53935)),
+                  prefixIcon: Icon(Icons.lock_outline_rounded,
+                      color: c.primary),
+                  hintText: 'Доод тал нь 6 тэмдэгт',
+                  hintStyle: TextStyle(color: c.textSecondary, fontSize: 14),
                   suffixIcon: IconButton(
-                    icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility,
-                      color: Colors.grey),
+                    icon: Icon(
+                        _obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                        color: c.textSecondary, size: 20),
                     onPressed: () => setState(() => _obscure = !_obscure),
                   ),
-                  hintText: 'Min 6 characters',
-                  hintStyle: TextStyle(color: Colors.grey[600]),
                   filled: true,
-                  fillColor: const Color(0xFF1E1E1E),
+                  fillColor: c.surface,
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide.none),
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: c.border),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: c.border),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: c.primary, width: 1.5),
+                  ),
                 ),
               ),
-              const SizedBox(height: 24),
+
+              SizedBox(height: 32),
+
               _isLoading
-                ? const CircularProgressIndicator(color: Color(0xFFE53935))
-                : ElevatedButton(
-                    onPressed: _register,
-                    child: const Text('SIGN UP'),
+                  ? CircularProgressIndicator(color: c.primary)
+                  : ElevatedButton(
+                      onPressed: _register,
+                      child: const Text('БҮРТГҮҮЛЭХ',
+                          style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.2)),
+                    ),
+
+              SizedBox(height: 24),
+
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text('Бүртгэлтэй юу? ',
+                      style: TextStyle(color: c.textSecondary, fontSize: 14)),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Text('Нэвтрэх',
+                        style: TextStyle(
+                            color: c.primary,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700)),
                   ),
-              const Spacer(),
+                ],
+              ),
+
+              const SizedBox(height: 40),
             ],
           ),
         ),
       ),
     );
   }
+
+  Widget _label(String text) => Align(
+        alignment: Alignment.centerLeft,
+        child: Text(text,
+            style: TextStyle(
+                color: c.textPrimary,
+                fontSize: 13,
+                fontWeight: FontWeight.w600)),
+      );
+
+  Widget _inputField({
+    required TextEditingController controller,
+    required String hint,
+    required IconData icon,
+    TextInputType inputType = TextInputType.text,
+    TextInputAction action = TextInputAction.next,
+    FocusNode? focusNode,
+    void Function(String)? onSubmitted,
+  }) =>
+      TextField(
+        controller: controller,
+        focusNode: focusNode,
+        keyboardType: inputType,
+        textInputAction: action,
+        onSubmitted: onSubmitted,
+        style: TextStyle(color: c.textPrimary, fontSize: 15),
+        decoration: InputDecoration(
+          prefixIcon: Icon(icon, color: c.primary),
+          hintText: hint,
+          hintStyle: TextStyle(color: c.textSecondary, fontSize: 14),
+          filled: true,
+          fillColor: c.surface,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: c.border),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: c.border),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: c.primary, width: 1.5),
+          ),
+        ),
+      );
 }

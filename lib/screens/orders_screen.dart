@@ -1,21 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../utils/app_theme.dart';
 
-class OrdersScreen extends StatelessWidget {
+class OrdersScreen extends StatefulWidget {
   final bool standalone;
   const OrdersScreen({super.key, this.standalone = false});
 
-  // +3 business days
+  @override
+  State<OrdersScreen> createState() => _OrdersScreenState();
+}
+
+class _OrdersScreenState extends State<OrdersScreen> {
+  AppColors c = AppColors.light;
+
   DateTime _deadline(DateTime from) {
-    var d = from;
-    var added = 0;
-    while (added < 3) {
-      d = d.add(const Duration(days: 1));
-      if (d.weekday != DateTime.saturday && d.weekday != DateTime.sunday) added++;
-    }
-    return d;
+    final d = from.add(const Duration(days: 3));
+    return DateTime(d.year, d.month, d.day);
   }
 
   String _fmtDate(DateTime d) =>
@@ -27,6 +29,7 @@ class OrdersScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    c = context.c;
     final user = FirebaseAuth.instance.currentUser;
     final uid  = user?.uid ?? '';
 
@@ -37,8 +40,8 @@ class OrdersScreen extends StatelessWidget {
           .snapshots(),
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
-          return const Center(
-              child: CircularProgressIndicator(color: AppTheme.primary));
+          return Center(
+              child: CircularProgressIndicator(color: c.primary));
         }
 
         final docs = (snap.data?.docs ?? [])
@@ -85,9 +88,9 @@ class OrdersScreen extends StatelessWidget {
       },
     );
 
-    if (standalone) {
+    if (widget.standalone) {
       return Scaffold(
-        backgroundColor: AppTheme.background,
+        backgroundColor: c.background,
         appBar: AppBar(title: const Text('Захиалгын түүх')),
         body: body,
       );
@@ -104,22 +107,22 @@ class OrdersScreen extends StatelessWidget {
             width: 90,
             height: 90,
             decoration: BoxDecoration(
-              color: AppTheme.primary.withValues(alpha: 0.08),
+              color: c.primary.withValues(alpha: 0.08),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.shopping_bag_outlined,
-                color: AppTheme.primary, size: 44),
+            child: Icon(Icons.shopping_bag_outlined,
+                color: c.primary, size: 44),
           ),
-          const SizedBox(height: 20),
-          const Text('Захиалга байхгүй байна',
+          SizedBox(height: 20),
+          Text('Захиалга байхгүй байна',
               style: TextStyle(
-                  color: AppTheme.textPrimary,
+                  color: c.textPrimary,
                   fontSize: 17,
                   fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           Text('Бараа захиалсны дараа\nэнд харагдана',
               textAlign: TextAlign.center,
-              style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5)),
+              style: TextStyle(color: c.textSecondary, fontSize: 13, height: 1.5)),
         ],
       ),
     );
@@ -145,29 +148,29 @@ class OrdersScreen extends StatelessWidget {
 
         return Container(
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-          color: AppTheme.background,
+          color: c.background,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Row(
+              Row(
                 children: [
                   Icon(Icons.receipt_long_rounded,
-                      color: AppTheme.primary, size: 18),
+                      color: c.primary, size: 18),
                   SizedBox(width: 8),
                   Text('Захиалгын түүх',
                       style: TextStyle(
-                          color: AppTheme.textPrimary,
+                          color: c.textPrimary,
                           fontWeight: FontWeight.bold,
                           fontSize: 16)),
                 ],
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: 12),
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: AppTheme.surface,
+                  color: c.surface,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppTheme.border),
+                  border: Border.all(color: c.border),
                 ),
                 child: Row(
                   children: [
@@ -175,13 +178,13 @@ class OrdersScreen extends StatelessWidget {
                       width: 46,
                       height: 46,
                       decoration: BoxDecoration(
-                        color: AppTheme.primary.withValues(alpha: 0.15),
+                        color: c.primary.withValues(alpha: 0.15),
                         shape: BoxShape.circle,
                       ),
                       child: Center(
                         child: Text(initial,
-                            style: const TextStyle(
-                                color: AppTheme.primary,
+                            style: TextStyle(
+                                color: c.primary,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 20)),
                       ),
@@ -193,24 +196,24 @@ class OrdersScreen extends StatelessWidget {
                         children: [
                           if (name.isNotEmpty)
                             Text(name,
-                                style: const TextStyle(
-                                    color: AppTheme.textPrimary,
+                                style: TextStyle(
+                                    color: c.textPrimary,
                                     fontWeight: FontWeight.w600,
                                     fontSize: 14)),
                           Text(email,
-                              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11),
+                              style: TextStyle(color: c.textSecondary, fontSize: 11),
                               overflow: TextOverflow.ellipsis),
-                          const SizedBox(height: 5),
+                          SizedBox(height: 5),
                           Container(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
-                              color: AppTheme.primary.withValues(alpha: 0.12),
+                              color: c.primary.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text('ID: $displayId',
-                                style: const TextStyle(
-                                    color: AppTheme.primary,
+                                style: TextStyle(
+                                    color: c.primary,
                                     fontSize: 10,
                                     fontWeight: FontWeight.bold,
                                     letterSpacing: 0.5)),
@@ -222,16 +225,16 @@ class OrdersScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text('$orderCount захиалга',
-                            style: const TextStyle(
-                                color: AppTheme.textSecondary, fontSize: 11)),
-                        const SizedBox(height: 4),
+                            style: TextStyle(
+                                color: c.textSecondary, fontSize: 11)),
+                        SizedBox(height: 4),
                         Text('${_fmt(totalSpent)}₮',
-                            style: const TextStyle(
-                                color: AppTheme.primary,
+                            style: TextStyle(
+                                color: c.primary,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 15)),
-                        const Text('нийт зарцуулсан',
-                            style: TextStyle(color: AppTheme.textSecondary, fontSize: 9)),
+                        Text('нийт зарцуулсан',
+                            style: TextStyle(color: c.textSecondary, fontSize: 9)),
                       ],
                     ),
                   ],
@@ -264,10 +267,12 @@ class _OrderCard extends StatefulWidget {
 }
 
 class _OrderCardState extends State<_OrderCard> {
-  bool _expanded = true;
+  AppColors c = AppColors.light;
+  bool _expanded = false;
 
   @override
   Widget build(BuildContext context) {
+    c = context.c;
     final status    = widget.data['status'] as String? ?? 'pending';
     final createdAt = (widget.data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now();
     final dl        = widget.deadline(createdAt);
@@ -333,7 +338,7 @@ class _OrderCardState extends State<_OrderCard> {
     final dividerColor = Theme.of(context).dividerColor;
     final itemBg = Theme.of(context).brightness == Brightness.dark
         ? const Color(0xFF2A2A2A)
-        : AppTheme.cardColor;
+        : c.card;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -455,8 +460,8 @@ class _OrderCardState extends State<_OrderCard> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.shopping_bag_outlined,
-                          color: AppTheme.primary, size: 14),
+                      Icon(Icons.shopping_bag_outlined,
+                          color: c.primary, size: 14),
                       const SizedBox(width: 6),
                       Text('${items.length} бараа',
                           style: TextStyle(
@@ -487,15 +492,15 @@ class _OrderCardState extends State<_OrderCard> {
                   const SizedBox(height: 6),
                   _priceRow(Icons.local_shipping_outlined, 'Хүргэлт',
                       '+${widget.fmt(delivery)}₮', const Color(0xFF388E3C)),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 12, vertical: 10),
                     decoration: BoxDecoration(
-                      color: AppTheme.primary.withValues(alpha: 0.08),
+                      color: c.primary.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                          color: AppTheme.primary.withValues(alpha: 0.2)),
+                          color: c.primary.withValues(alpha: 0.2)),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -506,8 +511,8 @@ class _OrderCardState extends State<_OrderCard> {
                                 fontWeight: FontWeight.bold,
                                 fontSize: 13)),
                         Text('${widget.fmt(total)}₮',
-                            style: const TextStyle(
-                                color: AppTheme.primary,
+                            style: TextStyle(
+                                color: c.primary,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 18)),
                       ],
@@ -565,28 +570,30 @@ class _OrderCardState extends State<_OrderCard> {
   }
 
   Widget _buildItemRow(dynamic item, Color itemBg, Color textPrimary, Color textSecondary) {
-    final name  = item['name']  as String? ?? '';
-    final cat   = item['category'] as String? ?? '';
-    final price = (item['priceMNT'] as num?)?.toInt() ?? 0;
+    final name      = item['name']      as String? ?? '';
+    final cat       = item['category']  as String? ?? '';
+    final size      = item['size']      as String? ?? '';
+    final imageUrl  = item['imageUrl']  as String? ?? '';
+    final productId = item['productId'] as String? ?? '';
+    final price     = (item['priceMNT'] as num?)?.toInt() ?? 0;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: itemBg,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppTheme.primary.withValues(alpha: 0.1)),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.primary.withValues(alpha: 0.1)),
       ),
       child: Row(
         children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: AppTheme.primary.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(8),
+          // Product image
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: SizedBox(
+              width: 56, height: 56,
+              child: _buildProductImage(imageUrl, productId),
             ),
-            child: const Icon(Icons.checkroom_outlined, color: AppTheme.primary, size: 18),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -597,14 +604,31 @@ class _OrderCardState extends State<_OrderCard> {
                     style: TextStyle(
                         color: textPrimary,
                         fontSize: 13,
-                        fontWeight: FontWeight.w500),
+                        fontWeight: FontWeight.w600),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 3),
                 Text(cat,
                     style: TextStyle(color: textSecondary, fontSize: 11)),
+                const SizedBox(height: 4),
+                if (size.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: c.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(size,
+                        style: TextStyle(
+                            color: c.primary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold)),
+                  ),
               ],
             ),
           ),
+          const SizedBox(width: 8),
           Text('${widget.fmt(price)}₮',
               style: TextStyle(
                   color: textPrimary,
@@ -615,13 +639,65 @@ class _OrderCardState extends State<_OrderCard> {
     );
   }
 
+  // Shows image from stored URL; if missing, fetches from products collection
+  Widget _buildProductImage(String imageUrl, String productId) {
+    if (imageUrl.isNotEmpty) {
+      return _imgWidget(imageUrl);
+    }
+    if (productId.isNotEmpty) {
+      return FutureBuilder<DocumentSnapshot>(
+        future: FirebaseFirestore.instance
+            .collection('products')
+            .doc(productId)
+            .get(),
+        builder: (_, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
+            return Container(
+              color: c.card,
+              child: Icon(Icons.checkroom_outlined,
+                  color: c.primary.withValues(alpha: 0.4), size: 24),
+            );
+          }
+          final url = snap.data?.exists == true
+              ? ((snap.data!.data() as Map<String, dynamic>)['imageUrl']
+                      as String?) ??
+                  ''
+              : '';
+          return _imgWidget(url);
+        },
+      );
+    }
+    return _imgWidget('');
+  }
+
+  Widget _imgWidget(String url) {
+    final fallback = Container(
+      color: c.card,
+      child: Icon(Icons.checkroom_outlined, color: c.primary, size: 24),
+    );
+    if (url.isEmpty) return fallback;
+    if (url.startsWith('http')) {
+      return CachedNetworkImage(
+        imageUrl: url,
+        width: 56, height: 56, fit: BoxFit.cover,
+        placeholder: (_, __) => fallback,
+        errorWidget: (_, __, ___) => fallback,
+      );
+    }
+    return Image.asset(
+      url,
+      width: 56, height: 56, fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => fallback,
+    );
+  }
+
   Widget _priceRow(IconData icon, String label, String value, Color vc) =>
       Row(
         children: [
-          Icon(icon, color: AppTheme.textSecondary, size: 13),
-          const SizedBox(width: 6),
+          Icon(icon, color: c.textSecondary, size: 13),
+          SizedBox(width: 6),
           Text(label,
-              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+              style: TextStyle(color: c.textSecondary, fontSize: 12)),
           const Spacer(),
           Text(value, style: TextStyle(color: vc, fontSize: 12)),
         ],

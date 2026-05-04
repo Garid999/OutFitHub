@@ -86,7 +86,7 @@ class AppInfoScreen extends StatelessWidget {
                       'Demon Slayer, JJK, AOT, Bleach болон бусад 10+ аниме'),
                   _item(Icons.local_shipping_outlined,
                       'Хурдан хүргэлт',
-                      'Улаанбаатар хотод 2–3 ажлын өдөрт хүргэнэ'),
+                      'Улаанбаатар хотод 3 хоногт хүргэнэ'),
                   _item(Icons.security_outlined,
                       'Найдвартай захиалга',
                       'Захиалгын баталгаажуулалт, хүргэлтийн мэдэгдэл'),

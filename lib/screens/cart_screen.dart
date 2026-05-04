@@ -20,6 +20,7 @@ class CartScreen extends StatefulWidget {
 }
 
 class _CartScreenState extends State<CartScreen> {
+  AppColors c = AppColors.light;
   static const int kDeliveryFee = 5000;
 
   int _toMNT(double price) => (price * 1000).round();
@@ -34,8 +35,9 @@ class _CartScreenState extends State<CartScreen> {
 
   @override
   Widget build(BuildContext context) {
+    c = context.c;
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: c.background,
       appBar: AppBar(
         title: const Text('Миний сагс'),
       ),
@@ -52,21 +54,21 @@ class _CartScreenState extends State<CartScreen> {
             width: 100,
             height: 100,
             decoration: BoxDecoration(
-              color: AppTheme.primary.withValues(alpha: 0.08),
+              color: c.primary.withValues(alpha: 0.08),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.shopping_bag_outlined,
-                color: AppTheme.primary, size: 48),
+            child: Icon(Icons.shopping_bag_outlined,
+                color: c.primary, size: 48),
           ),
-          const SizedBox(height: 20),
-          const Text('Сагс хоосон байна',
+          SizedBox(height: 20),
+          Text('Сагс хоосон байна',
               style: TextStyle(
-                  color: AppTheme.textPrimary,
+                  color: c.textPrimary,
                   fontSize: 18,
                   fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
-          const Text('Бараа нэмж эхлээрэй',
-              style: TextStyle(color: AppTheme.textSecondary, fontSize: 14)),
+          SizedBox(height: 8),
+          Text('Бараа нэмж эхлээрэй',
+              style: TextStyle(color: c.textSecondary, fontSize: 14)),
         ],
       ),
     );
@@ -109,7 +111,7 @@ class _CartScreenState extends State<CartScreen> {
               return Container(
                 margin: const EdgeInsets.only(bottom: 12),
                 decoration: BoxDecoration(
-                  color: AppTheme.surface,
+                  color: c.surface,
                   borderRadius: BorderRadius.circular(14),
                   boxShadow: [
                     BoxShadow(
@@ -131,9 +133,9 @@ class _CartScreenState extends State<CartScreen> {
                         child: Image.asset(
                           item.imageUrl,
                           fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) => const Center(
+                          errorBuilder: (_, __, ___) => Center(
                             child: Icon(Icons.checkroom,
-                                color: AppTheme.primary, size: 36),
+                                color: c.primary, size: 36),
                           ),
                         ),
                       ),
@@ -147,30 +149,30 @@ class _CartScreenState extends State<CartScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(item.name,
-                                style: const TextStyle(
-                                    color: AppTheme.textPrimary,
+                                style: TextStyle(
+                                    color: c.textPrimary,
                                     fontSize: 13,
                                     fontWeight: FontWeight.w700),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis),
-                            const SizedBox(height: 4),
+                            SizedBox(height: 4),
                             Container(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 8, vertical: 2),
                               decoration: BoxDecoration(
-                                color: AppTheme.primary.withValues(alpha: 0.08),
+                                color: c.primary.withValues(alpha: 0.08),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(item.category,
-                                  style: const TextStyle(
-                                      color: AppTheme.primary,
+                                  style: TextStyle(
+                                      color: c.primary,
                                       fontSize: 10,
                                       fontWeight: FontWeight.w600)),
                             ),
-                            const SizedBox(height: 8),
+                            SizedBox(height: 8),
                             Text('${_fmt(_toMNT(item.price))}₮',
-                                style: const TextStyle(
-                                    color: AppTheme.primary,
+                                style: TextStyle(
+                                    color: c.primary,
                                     fontSize: 15,
                                     fontWeight: FontWeight.w800)),
                           ],
@@ -179,8 +181,8 @@ class _CartScreenState extends State<CartScreen> {
                     ),
                     // Delete
                     IconButton(
-                      icon: const Icon(Icons.delete_outline_rounded,
-                          color: AppTheme.textSecondary, size: 22),
+                      icon: Icon(Icons.delete_outline_rounded,
+                          color: c.textSecondary, size: 22),
                       onPressed: () {
                         widget.onRemove(i);
                         setState(() {});
@@ -197,7 +199,7 @@ class _CartScreenState extends State<CartScreen> {
         Container(
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
           decoration: BoxDecoration(
-            color: AppTheme.surface,
+            color: c.surface,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
             boxShadow: [
               BoxShadow(
@@ -209,25 +211,25 @@ class _CartScreenState extends State<CartScreen> {
           child: Column(
             children: [
               _summaryRow('Бараа нийт', '${_fmt(_subtotal)}₮',
-                  AppTheme.textSecondary),
-              const SizedBox(height: 8),
+                  c.textSecondary),
+              SizedBox(height: 8),
               _summaryRow('Хүргэлт (2–3 хоног)',
                   '+${_fmt(kDeliveryFee)}₮', const Color(0xFF388E3C)),
-              const Padding(
+              Padding(
                 padding: EdgeInsets.symmetric(vertical: 12),
-                child: Divider(color: AppTheme.border),
+                child: Divider(color: c.border),
               ),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Нийт дүн',
+                  Text('Нийт дүн',
                       style: TextStyle(
-                          color: AppTheme.textPrimary,
+                          color: c.textPrimary,
                           fontSize: 17,
                           fontWeight: FontWeight.w800)),
                   Text('${_fmt(_total)}₮',
-                      style: const TextStyle(
-                          color: AppTheme.primary,
+                      style: TextStyle(
+                          color: c.primary,
                           fontSize: 22,
                           fontWeight: FontWeight.w900)),
                 ],
@@ -261,8 +263,8 @@ class _CartScreenState extends State<CartScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label,
-              style: const TextStyle(
-                  color: AppTheme.textSecondary, fontSize: 14)),
+              style: TextStyle(
+                  color: c.textSecondary, fontSize: 14)),
           Text(value,
               style: TextStyle(
                   color: valueColor,

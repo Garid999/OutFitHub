@@ -15,6 +15,7 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
+  AppColors c = AppColors.light;
   late AnimationController _ctrl;
   late Animation<double> _fadeAnim;
   late Animation<double> _scaleAnim;
@@ -57,8 +58,9 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
+    c = context.c;
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: c.background,
       body: Center(
         child: FadeTransition(
           opacity: _fadeAnim,
@@ -74,7 +76,7 @@ class _SplashScreenState extends State<SplashScreen>
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: Colors.white,
-                    border: Border.all(color: AppTheme.border, width: 2),
+                    border: Border.all(color: c.border, width: 2),
                     boxShadow: const [
                       BoxShadow(
                           color: Color(0x18000000),
@@ -88,7 +90,7 @@ class _SplashScreenState extends State<SplashScreen>
                       'assets/images/logo.png',
                       fit: BoxFit.contain,
                       errorBuilder: (_, __, ___) => Container(
-                        color: AppTheme.primary,
+                        color: c.primary,
                         child: const Center(
                           child: Text('AS',
                               style: TextStyle(
@@ -101,32 +103,32 @@ class _SplashScreenState extends State<SplashScreen>
                   ),
                 ),
 
-                const SizedBox(height: 24),
+                SizedBox(height: 24),
 
-                const Text('Anime Store',
+                Text('Anime Store',
                     style: TextStyle(
-                        color: AppTheme.primary,
+                        color: c.primary,
                         fontSize: 32,
                         fontWeight: FontWeight.w900,
                         letterSpacing: 1)),
 
-                const SizedBox(height: 8),
+                SizedBox(height: 8),
 
-                const Text('Монголын аниме фэшн дэлгүүр',
+                Text('Монголын аниме фэшн дэлгүүр',
                     style: TextStyle(
-                        color: AppTheme.textSecondary,
+                        color: c.textSecondary,
                         fontSize: 14,
                         letterSpacing: 0.5)),
 
-                const SizedBox(height: 48),
+                SizedBox(height: 48),
 
                 SizedBox(
                   width: 32,
                   height: 32,
                   child: CircularProgressIndicator(
-                    color: AppTheme.primary,
+                    color: c.primary,
                     strokeWidth: 2.5,
-                    backgroundColor: AppTheme.primary.withValues(alpha: 0.15),
+                    backgroundColor: c.primary.withValues(alpha: 0.15),
                   ),
                 ),
               ],

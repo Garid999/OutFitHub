@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../models/product.dart';
 import '../utils/app_theme.dart';
 
@@ -16,6 +17,7 @@ class ProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.c;
     final priceStr = (product.price * 1000)
         .toInt()
         .toString()
@@ -25,7 +27,7 @@ class ProductCard extends StatelessWidget {
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
-          color: AppTheme.surface,
+          color: c.surface,
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
@@ -41,17 +43,32 @@ class ProductCard extends StatelessWidget {
             Expanded(
               child: ClipRRect(
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                child: Container(
-                  width: double.infinity,
-                  color: Colors.white,
-                  child: Image.asset(
-                    product.imageUrl,
-                    width: double.infinity,
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => const Center(
-                      child: Icon(Icons.checkroom, size: 60, color: AppTheme.primary),
+                child: Stack(
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      color: Colors.white,
+                      child: _buildImage(product.imageUrl, c),
                     ),
-                  ),
+                    if (product.isSoldOut)
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.red[700],
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text('Дууссан',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),
@@ -62,37 +79,39 @@ class ProductCard extends StatelessWidget {
                 children: [
                   Text(
                     product.name,
-                    style: const TextStyle(
-                      color: AppTheme.textPrimary,
+                    style: TextStyle(
+                      color: c.textPrimary,
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 3),
+                  SizedBox(height: 3),
                   Text(
                     product.category,
-                    style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11),
+                    style: TextStyle(color: c.textSecondary, fontSize: 11),
                   ),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
                         '$priceStr₮',
-                        style: const TextStyle(
-                          color: AppTheme.primary,
+                        style: TextStyle(
+                          color: c.primary,
                           fontSize: 14,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
                       GestureDetector(
-                        onTap: onAddToCart,
+                        onTap: product.isSoldOut ? null : onAddToCart,
                         child: Container(
                           padding: const EdgeInsets.all(5),
                           decoration: BoxDecoration(
-                            color: AppTheme.primary,
+                            color: product.isSoldOut
+                                ? Colors.grey[600]
+                                : c.primary,
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: const Icon(Icons.add, color: Colors.white, size: 16),
@@ -105,6 +124,30 @@ class ProductCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildImage(String url, AppColors c) {
+    if (url.startsWith('http')) {
+      return CachedNetworkImage(
+        imageUrl: url,
+        width: double.infinity,
+        fit: BoxFit.contain,
+        placeholder: (_, __) => Center(
+          child: CircularProgressIndicator(strokeWidth: 2, color: c.primary),
+        ),
+        errorWidget: (_, __, ___) => Center(
+          child: Icon(Icons.checkroom, size: 60, color: c.primary),
+        ),
+      );
+    }
+    return Image.asset(
+      url,
+      width: double.infinity,
+      fit: BoxFit.contain,
+      errorBuilder: (_, __, ___) => Center(
+        child: Icon(Icons.checkroom, size: 60, color: c.primary),
       ),
     );
   }

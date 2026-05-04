@@ -29,6 +29,7 @@ class PaymentScreen extends StatefulWidget {
 
 class _PaymentScreenState extends State<PaymentScreen>
     with WidgetsBindingObserver {
+  AppColors c = AppColors.light;
   final _phoneCtrl   = TextEditingController();
   final _addressCtrl = TextEditingController();
   final _scrollCtrl  = ScrollController();
@@ -123,9 +124,12 @@ class _PaymentScreenState extends State<PaymentScreen>
       await FirebaseFirestore.instance.collection('orders').add({
         'orderNumber': orderNum,
         'items': widget.cartItems.map((p) => {
-              'name': p.name,
-              'category': p.category,
-              'priceMNT': (p.price * 1000).round(),
+              'productId': p.id,
+              'name':      p.name,
+              'category':  p.category,
+              'size':      p.selectedSize ?? 'M',
+              'imageUrl':  p.imageUrl,
+              'priceMNT':  (p.price * 1000).round(),
             }).toList(),
         'subtotal':      widget.subtotal,
         'deliveryFee':   PaymentScreen.kDeliveryFee,
@@ -174,10 +178,11 @@ class _PaymentScreenState extends State<PaymentScreen>
 
   @override
   Widget build(BuildContext context) {
+    c = context.c;
     if (_orderPlaced) return _buildSuccess();
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: c.background,
       appBar: AppBar(title: const Text('Төлбөр')),
       body: SingleChildScrollView(
         controller: _scrollCtrl,
@@ -224,8 +229,8 @@ class _PaymentScreenState extends State<PaymentScreen>
   }
 
   Widget _sectionTitle(String text) => Text(text,
-      style: const TextStyle(
-          color: AppTheme.textPrimary,
+      style: TextStyle(
+          color: c.textPrimary,
           fontSize: 16,
           fontWeight: FontWeight.w800));
 
@@ -246,13 +251,13 @@ class _PaymentScreenState extends State<PaymentScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Хүргэлтийн хугацаа: 2-3 ажлын өдөр',
+                Text('Хүргэлтийн хугацаа: 3 хоног',
                     style: TextStyle(
                         color: Color(0xFF2E7D32),
                         fontWeight: FontWeight.bold,
                         fontSize: 13)),
                 SizedBox(height: 3),
-                Text('Төлбөр баталгаажсаны дараа 2-3 ажлын өдрийн дотор хүргэгдэнэ.',
+                Text('Төлбөр баталгаажсаны дараа 3 хоногт хүргэгдэнэ.',
                     style: TextStyle(
                         color: Color(0xFF388E3C), fontSize: 11, height: 1.4)),
               ],
@@ -267,9 +272,9 @@ class _PaymentScreenState extends State<PaymentScreen>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppTheme.surface,
+        color: c.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.border),
+        border: Border.all(color: c.border),
         boxShadow: [BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 8, offset: const Offset(0, 3))],
@@ -277,49 +282,107 @@ class _PaymentScreenState extends State<PaymentScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Захиалгын дэлгэрэнгүй',
+          Text('Захиалгын дэлгэрэнгүй',
               style: TextStyle(
-                  color: AppTheme.textPrimary,
+                  color: c.textPrimary,
                   fontWeight: FontWeight.w800,
                   fontSize: 15)),
-          const SizedBox(height: 12),
-          ...widget.cartItems.map((p) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
+          SizedBox(height: 12),
+          ...widget.cartItems.map((p) => Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: c.card,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: c.border),
+                ),
                 child: Row(
                   children: [
-                    const Icon(Icons.checkroom_outlined,
-                        color: AppTheme.primary, size: 15),
-                    const SizedBox(width: 8),
+                    // Product image
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.asset(
+                        p.imageUrl,
+                        width: 64,
+                        height: 64,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          width: 64,
+                          height: 64,
+                          decoration: BoxDecoration(
+                            color: c.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(Icons.checkroom_outlined,
+                              color: c.primary, size: 28),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // Name + size
                     Expanded(
-                        child: Text(p.name,
-                            style: const TextStyle(
-                                color: AppTheme.textSecondary, fontSize: 13),
-                            overflow: TextOverflow.ellipsis)),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(p.name,
+                              style: TextStyle(
+                                  color: c.textPrimary,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis),
+                          SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: c.primary.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                      color: c.primary.withValues(alpha: 0.3)),
+                                ),
+                                child: Text(
+                                  'Хэмжээ: ${p.selectedSize ?? 'M'}',
+                                  style: TextStyle(
+                                      color: c.primary,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(width: 8),
+                    // Price
                     Text('${_fmt((p.price * 1000).round())}₮',
-                        style: const TextStyle(
-                            color: AppTheme.textPrimary,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600)),
+                        style: TextStyle(
+                            color: c.primary,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700)),
                   ],
                 ),
               )),
-          const Divider(color: AppTheme.border, height: 20),
-          _sumRow('Бараа нийт', '${_fmt(widget.subtotal)}₮', AppTheme.textSecondary),
-          const SizedBox(height: 6),
+          Divider(color: c.border, height: 20),
+          _sumRow('Бараа нийт', '${_fmt(widget.subtotal)}₮', c.textSecondary),
+          SizedBox(height: 6),
           _sumRow('Хүргэлт', '+${_fmt(PaymentScreen.kDeliveryFee)}₮',
               const Color(0xFF388E3C)),
-          const Divider(color: AppTheme.border, height: 20),
+          Divider(color: c.border, height: 20),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Нийт дүн',
+              Text('Нийт дүн',
                   style: TextStyle(
-                      color: AppTheme.textPrimary,
+                      color: c.textPrimary,
                       fontWeight: FontWeight.w800,
                       fontSize: 15)),
               Text('${_fmt(widget.total)}₮',
-                  style: const TextStyle(
-                      color: AppTheme.primary,
+                  style: TextStyle(
+                      color: c.primary,
                       fontWeight: FontWeight.w900,
                       fontSize: 22)),
             ],
@@ -335,7 +398,7 @@ class _PaymentScreenState extends State<PaymentScreen>
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(label,
-                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                style: TextStyle(color: c.textSecondary, fontSize: 13)),
             Text(value,
                 style: TextStyle(color: vc, fontSize: 13, fontWeight: FontWeight.w600)),
           ],
@@ -355,32 +418,32 @@ class _PaymentScreenState extends State<PaymentScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label,
-            style: const TextStyle(
-                color: AppTheme.textPrimary,
+            style: TextStyle(
+                color: c.textPrimary,
                 fontSize: 12,
                 fontWeight: FontWeight.w600)),
-        const SizedBox(height: 6),
+        SizedBox(height: 6),
         TextField(
           controller: controller,
           keyboardType: keyboardType,
           maxLines: maxLines,
-          style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14),
+          style: TextStyle(color: c.textPrimary, fontSize: 14),
           onChanged: onChanged,
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: const TextStyle(color: AppTheme.textSecondary),
-            prefixIcon: Icon(icon, color: AppTheme.primary, size: 20),
+            hintStyle: TextStyle(color: c.textSecondary),
+            prefixIcon: Icon(icon, color: c.primary, size: 20),
             filled: true,
-            fillColor: AppTheme.surface,
+            fillColor: c.surface,
             border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: AppTheme.border)),
+                borderSide: BorderSide(color: c.border)),
             enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: AppTheme.border)),
+                borderSide: BorderSide(color: c.border)),
             focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: AppTheme.primary, width: 1.5)),
+                borderSide: BorderSide(color: c.primary, width: 1.5)),
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
           ),
@@ -392,7 +455,7 @@ class _PaymentScreenState extends State<PaymentScreen>
   Widget _buildBankCard() {
     return Container(
       decoration: BoxDecoration(
-        color: AppTheme.surface,
+        color: c.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: const Color(0xFF1A4A8A).withValues(alpha: 0.4), width: 1.5),
         boxShadow: [BoxShadow(
@@ -468,8 +531,8 @@ class _PaymentScreenState extends State<PaymentScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-          color: AppTheme.cardColor, borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppTheme.border)),
+          color: c.card, borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: c.border)),
       child: Row(
         children: [
           Expanded(
@@ -477,12 +540,12 @@ class _PaymentScreenState extends State<PaymentScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(label,
-                    style: const TextStyle(
-                        color: AppTheme.textSecondary, fontSize: 11)),
-                const SizedBox(height: 3),
+                    style: TextStyle(
+                        color: c.textSecondary, fontSize: 11)),
+                SizedBox(height: 3),
                 Text(value,
-                    style: const TextStyle(
-                        color: AppTheme.textPrimary,
+                    style: TextStyle(
+                        color: c.textPrimary,
                         fontSize: 14,
                         fontWeight: FontWeight.w700)),
               ],
@@ -492,11 +555,11 @@ class _PaymentScreenState extends State<PaymentScreen>
             GestureDetector(
               onTap: () {
                 Clipboard.setData(ClipboardData(text: value));
-                _snack('$label хуулагдлаа', AppTheme.primary);
+                _snack('$label хуулагдлаа', c.primary);
               },
-              child: const Padding(
+              child: Padding(
                 padding: EdgeInsets.only(left: 8),
-                child: Icon(Icons.copy_rounded, color: AppTheme.primary, size: 18),
+                child: Icon(Icons.copy_rounded, color: c.primary, size: 18),
               ),
             ),
         ],
@@ -553,18 +616,18 @@ class _PaymentScreenState extends State<PaymentScreen>
         width: double.infinity,
         height: 56,
         decoration: BoxDecoration(
-          color: AppTheme.primary.withValues(alpha: 0.1),
+          color: c.primary.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppTheme.border),
+          border: Border.all(color: c.border),
         ),
-        child: const Row(
+        child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             SizedBox(width: 18, height: 18,
-                child: CircularProgressIndicator(color: AppTheme.primary, strokeWidth: 2)),
+                child: CircularProgressIndicator(color: c.primary, strokeWidth: 2)),
             SizedBox(width: 10),
             Text('Хадгалж байна...',
-                style: TextStyle(color: AppTheme.primary, fontSize: 15, fontWeight: FontWeight.bold)),
+                style: TextStyle(color: c.primary, fontSize: 15, fontWeight: FontWeight.bold)),
           ],
         ),
       );
@@ -625,7 +688,7 @@ class _PaymentScreenState extends State<PaymentScreen>
 
   Widget _buildSuccess() {
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: c.background,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -640,28 +703,28 @@ class _PaymentScreenState extends State<PaymentScreen>
                     color: const Color(0xFF388E3C).withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.check_circle_rounded,
+                  child: Icon(Icons.check_circle_rounded,
                       color: Color(0xFF388E3C), size: 60),
                 ),
-                const SizedBox(height: 24),
-                const Text('Захиалга амжилттай!',
+                SizedBox(height: 24),
+                Text('Захиалга амжилттай!',
                     style: TextStyle(
-                        color: AppTheme.textPrimary,
+                        color: c.textPrimary,
                         fontSize: 24,
                         fontWeight: FontWeight.w900)),
-                const SizedBox(height: 10),
-                const Text(
-                  'Таны захиалга хүлээн авагдлаа.\nТөлбөр баталгаажсаны дараа 2-3 хоногт хүргэгдэнэ.',
+                SizedBox(height: 10),
+                Text(
+                  'Таны захиалга хүлээн авагдлаа.\nТөлбөр баталгаажсаны дараа 3 хоногт хүргэгдэнэ.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: AppTheme.textSecondary, height: 1.5),
+                  style: TextStyle(color: c.textSecondary, height: 1.5),
                 ),
-                const SizedBox(height: 28),
+                SizedBox(height: 28),
                 Container(
                   padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
-                    color: AppTheme.surface,
+                    color: c.surface,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppTheme.border),
+                    border: Border.all(color: c.border),
                     boxShadow: [BoxShadow(
                         color: Colors.black.withValues(alpha: 0.05),
                         blurRadius: 8, offset: const Offset(0, 3))],
@@ -669,15 +732,85 @@ class _PaymentScreenState extends State<PaymentScreen>
                   child: Column(
                     children: [
                       _successRow(Icons.receipt_long_outlined, 'Захиалгын дугаар', _orderNumber),
-                      const Divider(color: AppTheme.border, height: 20),
+                      Divider(color: c.border, height: 20),
                       _successRow(Icons.phone_outlined, 'Утас', _phoneCtrl.text.trim()),
-                      const Divider(color: AppTheme.border, height: 20),
+                      Divider(color: c.border, height: 20),
                       _successRow(Icons.location_on_outlined, 'Хаяг', _addressCtrl.text.trim()),
-                      const Divider(color: AppTheme.border, height: 20),
+                      Divider(color: c.border, height: 20),
+                      // Ordered items with image + size
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text('Захиалсан бараа',
+                            style: TextStyle(
+                                color: c.textSecondary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600)),
+                      ),
+                      const SizedBox(height: 10),
+                      ...widget.cartItems.map((p) => Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Row(
+                              children: [
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.asset(
+                                    p.imageUrl,
+                                    width: 52,
+                                    height: 52,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => Container(
+                                      width: 52,
+                                      height: 52,
+                                      color: c.primary.withValues(alpha: 0.1),
+                                      child: Icon(Icons.checkroom_outlined,
+                                          color: c.primary, size: 22),
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(p.name,
+                                          style: TextStyle(
+                                              color: c.textPrimary,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis),
+                                      SizedBox(height: 3),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: c.primary.withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(5),
+                                        ),
+                                        child: Text(
+                                          'Хэмжээ: ${p.selectedSize ?? 'M'}',
+                                          style: TextStyle(
+                                              color: c.primary,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Text('${_fmt((p.price * 1000).round())}₮',
+                                    style: TextStyle(
+                                        color: c.textPrimary,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600)),
+                              ],
+                            ),
+                          )),
+                      Divider(color: c.border, height: 20),
                       _successRow(Icons.shopping_bag_outlined, 'Бараа нийт', '${_fmt(widget.subtotal)}₮'),
-                      const Divider(color: AppTheme.border, height: 20),
+                      Divider(color: c.border, height: 20),
                       _successRow(Icons.local_shipping_outlined, 'Хүргэлт', '+${_fmt(PaymentScreen.kDeliveryFee)}₮'),
-                      const Divider(color: AppTheme.border, height: 20),
+                      Divider(color: c.border, height: 20),
                       _successRow(Icons.payments_outlined, 'Нийт дүн', '${_fmt(widget.total)}₮'),
                     ],
                   ),
@@ -690,19 +823,19 @@ class _PaymentScreenState extends State<PaymentScreen>
                   label: const Text('Захиалгын түүх харах',
                       style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton(
                     style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: AppTheme.border),
+                      side: BorderSide(color: c.border),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     onPressed: () => Navigator.popUntil(context, (r) => r.isFirst),
-                    child: const Text('Нүүр хуудас руу буцах',
+                    child: Text('Нүүр хуудас руу буцах',
                         style: TextStyle(
-                            color: AppTheme.textPrimary,
+                            color: c.textPrimary,
                             fontSize: 15,
                             fontWeight: FontWeight.bold)),
                   ),
@@ -717,16 +850,16 @@ class _PaymentScreenState extends State<PaymentScreen>
 
   Widget _successRow(IconData icon, String label, String value) => Row(
         children: [
-          Icon(icon, color: AppTheme.primary, size: 20),
-          const SizedBox(width: 12),
+          Icon(icon, color: c.primary, size: 20),
+          SizedBox(width: 12),
           Text(label,
-              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+              style: TextStyle(color: c.textSecondary, fontSize: 13)),
           const Spacer(),
           Flexible(
             child: Text(value,
                 textAlign: TextAlign.right,
-                style: const TextStyle(
-                    color: AppTheme.textPrimary,
+                style: TextStyle(
+                    color: c.textPrimary,
                     fontWeight: FontWeight.w700,
                     fontSize: 13)),
           ),
