@@ -7,6 +7,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/product.dart';
+import '../utils/notifications_helper.dart';
 
 class AdminProductFormScreen extends StatefulWidget {
   final Product? product;
@@ -154,6 +155,8 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
 
     if (name.isEmpty) { _snack('Барааны нэр оруулна уу'); return; }
     if (price == null || price <= 0) { _snack('Зөв үнэ оруулна уу'); return; }
+    // Convert full MNT to thousands (39000₮ → 39.0 stored)
+    final storedPrice = price >= 1000 ? price / 1000 : price;
 
     setState(() => _saving = true);
     try {
@@ -161,41 +164,63 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
       final stockMap = _stockMap;
       final sizes    = _availableSizes;
 
+      // 1. Upload image first (with 45s timeout) — before saving to Firestore
+      String imageUrl = _currentImageUrl ?? '';
+      String? tempDocId;
+
+      if (_pickedFile != null) {
+        // For new products: generate doc ID early so we can use it for Storage path
+        if (!_isEdit) tempDocId = col.doc().id;
+        final uploadId = _isEdit ? widget.product!.id : tempDocId!;
+        try {
+          imageUrl = await _uploadImage(uploadId)
+              .timeout(const Duration(seconds: 45)) ?? imageUrl;
+        } on Exception catch (e) {
+          // Upload failed → save without image and warn
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('Зураг upload болсонгүй: $e\nБараа хадгалагдаж байна...'),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 4),
+            ));
+          }
+        }
+      }
+
+      // 2. Save to Firestore
       if (_isEdit) {
-        // 1. Save metadata immediately
         final docId = widget.product!.id;
         await col.doc(docId).update({
-          'name': name, 'category': _category, 'price': price,
+          'name': name, 'category': _category, 'price': storedPrice,
           'description': desc, 'availableSizes': sizes,
           'stock': stockMap, 'isActive': _isActive,
+          'imageUrl': imageUrl,
           'updatedAt': FieldValue.serverTimestamp(),
         });
-        // 2. Upload image separately (won't block navigation)
-        if (_pickedFile != null) {
-          _uploadInBackground(docId);
-        }
       } else {
-        // 1. Create Firestore doc immediately (no imageUrl yet)
-        final docRef = col.doc();
-        await docRef.set({
-          'name': name, 'category': _category, 'price': price,
+        final docId = tempDocId ?? col.doc().id;
+        await col.doc(docId).set({
+          'name': name, 'category': _category, 'price': storedPrice,
           'description': desc, 'rating': 5.0,
           'availableSizes': sizes, 'stock': stockMap,
           'isActive': true,
-          'imageUrl': _currentImageUrl ?? '',
+          'imageUrl': imageUrl,
           'createdAt': FieldValue.serverTimestamp(),
         });
-        // 2. Upload image and update URL separately
-        if (_pickedFile != null) {
-          _uploadInBackground(docRef.id);
-        }
+        // 3. Notify all users about new product
+        NotifHelper.broadcast(
+          type: 'new_product',
+          title: '🆕 Шинэ бараа нэмэгдлээ!',
+          body: '$name — $_category · ${(storedPrice * 1000).toInt()}₮',
+          data: {'productId': docId},
+        );
       }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Бараа хадгалагдлаа! Зураг ар дэвхэр upload хийгдэж байна...'),
+          content: Text('Бараа хадгалагдлаа!'),
           backgroundColor: Colors.green,
-          duration: Duration(seconds: 3),
+          duration: Duration(seconds: 2),
         ));
         Navigator.pop(context);
       }
@@ -204,20 +229,6 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
-  }
-
-  // Upload image in background and update Firestore imageUrl
-  void _uploadInBackground(String docId) {
-    _uploadImage(docId).then((url) {
-      if (url != null && url.isNotEmpty) {
-        FirebaseFirestore.instance
-            .collection('products')
-            .doc(docId)
-            .update({'imageUrl': url});
-      }
-    }).catchError((_) {
-      // Silent fail — admin can re-edit to upload image again
-    });
   }
 
   void _snack(String msg) => ScaffoldMessenger.of(context).showSnackBar(
@@ -264,7 +275,7 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
               _buildField(_nameCtrl, 'Нэр', 'Жишээ: Muichiro Tokito',
                   Icons.label_outline),
               const SizedBox(height: 12),
-              _buildField(_priceCtrl, 'Үнэ (мянга)', 'Жишээ: 39',
+              _buildField(_priceCtrl, 'Үнэ (₮)', 'Жишээ: 39000',
                   Icons.payments_outlined, type: TextInputType.number),
               const SizedBox(height: 12),
               _buildCategoryDropdown(),

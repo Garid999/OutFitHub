@@ -13,6 +13,7 @@ import 'product_detail_screen.dart';
 import 'cart_screen.dart';
 import 'orders_screen.dart';
 import 'profile_screen.dart';
+import 'notifications_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -31,11 +32,15 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Product> _products = [];
   StreamSubscription<QuerySnapshot>? _productSub;
   bool _cartLoaded = false;
+  List<Map<String, dynamic>> _activeEvents = [];
+
+  StreamSubscription<QuerySnapshot>? _eventSub;
 
   @override
   void initState() {
     super.initState();
     _seedAndListen();
+    _listenEvents();
     WidgetsBinding.instance.addPostFrameCallback((_) => _showWelcomeIfNeeded());
   }
 
@@ -113,7 +118,43 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _productSub?.cancel();
+    _eventSub?.cancel();
     super.dispose();
+  }
+
+  void _listenEvents() {
+    // Single where clause only — filter endDate locally to avoid composite index
+    _eventSub = FirebaseFirestore.instance
+        .collection('events')
+        .where('isActive', isEqualTo: true)
+        .snapshots()
+        .listen((s) {
+      if (!mounted) return;
+      final now = DateTime.now();
+      setState(() => _activeEvents = s.docs
+          .map((d) => {'id': d.id, ...d.data()})
+          .where((e) {
+            final end = (e['endDate'] as Timestamp?)?.toDate();
+            return end == null || end.isAfter(now);
+          })
+          .toList());
+    });
+  }
+
+  double? _discountedPrice(Product p) {
+    for (final e in _activeEvents) {
+      final ids      = (e['productIds'] as List?)?.cast<String>() ?? [];
+      final category = e['category'] as String? ?? 'Бүгд';
+      final matches  = ids.contains(p.id) ||
+          (ids.isEmpty && (category == 'Бүгд' || category == p.category));
+      if (!matches) continue;
+      final type    = e['discountType']  as String? ?? 'fixed';
+      final val     = (e['discountValue'] as num?)?.toDouble() ?? 0;
+      final origMNT = p.price * 1000;
+      if (type == 'percent') return origMNT * (1 - val / 100);
+      return (origMNT - val).clamp(0, double.infinity);
+    }
+    return null;
   }
 
   Future<void> _seedAndListen() async {
@@ -324,6 +365,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 itemCount: _filteredProducts.length,
                 itemBuilder: (ctx, i) => ProductCard(
                   product: _filteredProducts[i],
+                  discountedPrice: _discountedPrice(_filteredProducts[i]),
                   onAddToCart: () => _addToCart(_filteredProducts[i], 'M'),
                   onTap: () => Navigator.push(context,
                     MaterialPageRoute(builder: (_) => ProductDetailScreen(
@@ -458,6 +500,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   itemCount: _filteredProducts.length,
                   itemBuilder: (ctx, i) => ProductCard(
                     product: _filteredProducts[i],
+                    discountedPrice: _discountedPrice(_filteredProducts[i]),
                     onAddToCart: () => _addToCart(_filteredProducts[i], 'M'),
                     onTap: () => Navigator.push(
                         context,
@@ -536,6 +579,9 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         actions: [
+          // Notification bell
+          _NotificationBell(c: c),
+          // Cart
           Stack(
             children: [
               IconButton(
@@ -581,6 +627,63 @@ class _HomeScreenState extends State<HomeScreen> {
           BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: 'Profile'),
         ],
       ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notification Bell widget with unread badge
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _NotificationBell extends StatelessWidget {
+  final AppColors c;
+  const _NotificationBell({required this.c});
+
+  String get _uid => FirebaseAuth.instance.currentUser?.uid ?? '';
+
+  @override
+  Widget build(BuildContext context) {
+    if (_uid.isEmpty) return const SizedBox.shrink();
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(_uid)
+          .collection('notifications')
+          .where('isRead', isEqualTo: false)
+          .snapshots(),
+      builder: (_, snap) {
+        final unread = snap.data?.docs.length ?? 0;
+        return Stack(
+          children: [
+            IconButton(
+              icon: Icon(Icons.notifications_outlined, color: c.textPrimary),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const NotificationsScreen()),
+              ),
+            ),
+            if (unread > 0)
+              Positioned(
+                right: 8, top: 8,
+                child: Container(
+                  width: 16, height: 16,
+                  decoration: BoxDecoration(
+                      color: c.primary, shape: BoxShape.circle),
+                  child: Center(
+                    child: Text(
+                      unread > 9 ? '9+' : '$unread',
+                      style: const TextStyle(
+                          color: Colors.white, fontSize: 9,
+                          fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }

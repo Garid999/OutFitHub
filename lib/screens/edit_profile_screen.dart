@@ -19,11 +19,11 @@ class EditProfileScreen extends StatefulWidget {
 class _EditProfileScreenState extends State<EditProfileScreen> {
   final _nameCtrl = TextEditingController();
   bool _isLoading = false;
-  bool _uploadingPhoto = false;
 
   XFile?     _pickedFile;
   Uint8List? _pickedBytes;
   String?    _photoUrl;
+  double?    _uploadProgress; // 0.0 – 1.0
 
   @override
   void initState() {
@@ -77,7 +77,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (source == null) return;
 
     final xFile = await ImagePicker()
-        .pickImage(source: source, imageQuality: 85, maxWidth: 512);
+        .pickImage(source: source, imageQuality: 60, maxWidth: 300);
     if (xFile == null || !mounted) return;
 
     final bytes = await xFile.readAsBytes();
@@ -87,12 +87,24 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Future<String?> _uploadPhoto(String uid) async {
     if (_pickedFile == null) return null;
     final ref = FirebaseStorage.instance.ref('users/$uid/profile.jpg');
+
+    late UploadTask task;
     if (kIsWeb) {
-      await ref.putData(_pickedBytes!,
+      task = ref.putData(_pickedBytes!,
           SettableMetadata(contentType: 'image/jpeg'));
     } else {
-      await ref.putFile(File(_pickedFile!.path));
+      task = ref.putFile(File(_pickedFile!.path));
     }
+
+    // Track progress
+    task.snapshotEvents.listen((snap) {
+      if (!mounted) return;
+      setState(() => _uploadProgress =
+          snap.bytesTransferred / (snap.totalBytes == 0 ? 1 : snap.totalBytes));
+    });
+
+    await task;
+    if (mounted) setState(() => _uploadProgress = null);
     return await ref.getDownloadURL();
   }
 
@@ -105,16 +117,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     try {
       final user = FirebaseAuth.instance.currentUser!;
 
-      // Upload photo if new one picked
+      // Upload photo first (small, compressed)
       String? newPhotoUrl = _photoUrl;
       if (_pickedFile != null) {
-        setState(() => _uploadingPhoto = true);
         newPhotoUrl = await _uploadPhoto(user.uid);
-        setState(() => _uploadingPhoto = false);
       }
 
       await user.updateDisplayName(name);
       if (newPhotoUrl != null) await user.updatePhotoURL(newPhotoUrl);
+      await user.reload(); // refresh cached user object
 
       await FirebaseFirestore.instance
           .collection('users')
@@ -127,11 +138,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (!mounted) return;
       _snack('Амжилттай хадгалагдлаа');
       Navigator.pop(context);
+    } on FirebaseException catch (e) {
+      if (!mounted) return;
+      _snack('Firebase алдаа: ${e.message ?? e.code}');
     } catch (e) {
       if (!mounted) return;
       _snack('Алдаа: $e');
     } finally {
-      if (mounted) setState(() { _isLoading = false; _uploadingPhoto = false; });
+      if (mounted) setState(() {
+        _isLoading = false;
+        _uploadProgress = null;
+      });
     }
   }
 
@@ -180,7 +197,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     child: ClipOval(child: _buildAvatar(initial, c)),
                   ),
 
-                  // Camera icon badge
+                  // Camera icon badge with progress
                   Container(
                     width: 32, height: 32,
                     decoration: BoxDecoration(
@@ -188,11 +205,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       color: c.primary,
                       border: Border.all(color: c.background, width: 2),
                     ),
-                    child: _uploadingPhoto
-                        ? const Padding(
-                            padding: EdgeInsets.all(6),
+                    child: _uploadProgress != null
+                        ? Padding(
+                            padding: const EdgeInsets.all(4),
                             child: CircularProgressIndicator(
-                                color: Colors.white, strokeWidth: 2))
+                                value: _uploadProgress,
+                                color: Colors.white,
+                                strokeWidth: 2.5))
                         : const Icon(Icons.camera_alt_rounded,
                             color: Colors.white, size: 16),
                   ),

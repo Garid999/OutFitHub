@@ -1,220 +1,191 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../utils/app_theme.dart';
+import '../utils/notifications_helper.dart';
+import 'event_detail_screen.dart';
 
-class NotificationsScreen extends StatefulWidget {
+class NotificationsScreen extends StatelessWidget {
   const NotificationsScreen({super.key});
 
-  @override
-  State<NotificationsScreen> createState() => _NotificationsScreenState();
-}
+  String get _uid => FirebaseAuth.instance.currentUser?.uid ?? '';
 
-class _NotificationsScreenState extends State<NotificationsScreen> {
-  bool _orderNotif  = true;
-  bool _promoNotif  = false;
-  bool _newsNotif   = false;
-  bool _isLoading   = true;
+  CollectionReference get _col => FirebaseFirestore.instance
+      .collection('users')
+      .doc(_uid)
+      .collection('notifications');
 
-  @override
-  void initState() {
-    super.initState();
-    _load();
+  IconData _icon(String type) {
+    switch (type) {
+      case 'order_update': return Icons.receipt_long_rounded;
+      case 'new_product':  return Icons.checkroom_outlined;
+      case 'event':        return Icons.local_offer_rounded;
+      default:             return Icons.notifications_outlined;
+    }
   }
 
-  Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _orderNotif = prefs.getBool('notif_order') ?? true;
-      _promoNotif = prefs.getBool('notif_promo') ?? false;
-      _newsNotif  = prefs.getBool('notif_news')  ?? false;
-      _isLoading  = false;
-    });
+  Color _iconColor(String type) {
+    switch (type) {
+      case 'order_update': return const Color(0xFF4CAF50);
+      case 'new_product':  return const Color(0xFF1565C0);
+      case 'event':        return const Color(0xFFE53935);
+      default:             return const Color(0xFF9E9E9E);
+    }
   }
 
-  Future<void> _save() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('notif_order', _orderNotif);
-    await prefs.setBool('notif_promo', _promoNotif);
-    await prefs.setBool('notif_news',  _newsNotif);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-          content: Text('Тохиргоо хадгалагдлаа'),
-          backgroundColor: AppTheme.primary),
-    );
+  String _timeAgo(Timestamp? ts) {
+    if (ts == null) return '';
+    final diff = DateTime.now().difference(ts.toDate());
+    if (diff.inMinutes < 1)  return 'Саяхан';
+    if (diff.inMinutes < 60) return '${diff.inMinutes} мин өмнө';
+    if (diff.inHours < 24)   return '${diff.inHours} цаг өмнө';
+    if (diff.inDays < 7)     return '${diff.inDays} өдөр өмнө';
+    final d = ts.toDate();
+    return '${d.month}/${d.day}';
   }
 
   @override
   Widget build(BuildContext context) {
+    final c = context.c;
+    if (_uid.isEmpty) {
+      return Scaffold(
+        backgroundColor: c.background,
+        appBar: AppBar(title: const Text('Мэдэгдэл')),
+        body: Center(child: Text('Нэвтэрч орно уу',
+            style: TextStyle(color: c.textSecondary))),
+      );
+    }
+
     return Scaffold(
-      backgroundColor: AppTheme.background,
-      appBar: AppBar(title: const Text('Мэдэгдлийн тохиргоо')),
-      body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppTheme.primary))
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
+      backgroundColor: c.background,
+      appBar: AppBar(
+        title: const Text('Мэдэгдэл'),
+        actions: [
+          TextButton(
+            onPressed: () => NotifHelper.markAllRead(_uid),
+            child: Text('Бүгд уншсан',
+                style: TextStyle(color: c.primary, fontSize: 13)),
+          ),
+        ],
+      ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: _col.orderBy('createdAt', descending: true).limit(50).snapshots(),
+        builder: (_, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator(color: c.primary));
+          }
+          final docs = snap.data?.docs ?? [];
+          if (docs.isEmpty) {
+            return Center(
               child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Info card
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primary.withValues(alpha: 0.06),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                          color: AppTheme.primary.withValues(alpha: 0.2)),
-                    ),
-                    child: const Row(
+                  Icon(Icons.notifications_none_rounded,
+                      color: c.textSecondary, size: 64),
+                  const SizedBox(height: 12),
+                  Text('Мэдэгдэл байхгүй',
+                      style: TextStyle(color: c.textSecondary, fontSize: 16)),
+                  const SizedBox(height: 6),
+                  Text('Захиалга, шинэ бараа, event-ийн мэдэгдэл\nэнд харагдана',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: c.textSecondary, fontSize: 12)),
+                ],
+              ),
+            );
+          }
+          return ListView.separated(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            itemCount: docs.length,
+            separatorBuilder: (_, __) =>
+                Divider(color: c.border, height: 1, indent: 70),
+            itemBuilder: (_, i) {
+              final d      = docs[i].data() as Map<String, dynamic>;
+              final type   = d['type']   as String? ?? '';
+              final title  = d['title']  as String? ?? '';
+              final body   = d['body']   as String? ?? '';
+              final isRead = d['isRead'] as bool?   ?? false;
+              final ts     = d['createdAt'] as Timestamp?;
+              return Material(
+                color: isRead
+                    ? Colors.transparent
+                    : c.primary.withValues(alpha: 0.04),
+                child: InkWell(
+                  onTap: () {
+                    NotifHelper.markRead(_uid, docs[i].id);
+                    if (type == 'event') {
+                      final eventId =
+                          (d['data'] as Map<String, dynamic>?)?['eventId']
+                              as String? ?? '';
+                      if (eventId.isNotEmpty && context.mounted) {
+                        Navigator.push(context, MaterialPageRoute(
+                            builder: (_) =>
+                                EventDetailScreen(eventId: eventId)));
+                      }
+                    }
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.notifications_outlined,
-                            color: AppTheme.primary, size: 20),
-                        SizedBox(width: 10),
+                        Container(
+                          width: 42, height: 42,
+                          decoration: BoxDecoration(
+                            color: _iconColor(type).withValues(alpha: 0.12),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(_icon(type),
+                              color: _iconColor(type), size: 20),
+                        ),
+                        const SizedBox(width: 12),
                         Expanded(
-                          child: Text(
-                            'Мэдэгдлүүдийг хянаж удирдаарай',
-                            style: TextStyle(
-                                color: AppTheme.primary,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(title,
+                                        style: TextStyle(
+                                            color: c.textPrimary,
+                                            fontWeight: isRead
+                                                ? FontWeight.w500
+                                                : FontWeight.w700,
+                                            fontSize: 13)),
+                                  ),
+                                  Text(_timeAgo(ts),
+                                      style: TextStyle(
+                                          color: c.textSecondary,
+                                          fontSize: 11)),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(body,
+                                  style: TextStyle(
+                                      color: c.textSecondary,
+                                      fontSize: 12, height: 1.4),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis),
+                            ],
                           ),
                         ),
+                        if (!isRead) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            width: 8, height: 8,
+                            decoration: BoxDecoration(
+                                shape: BoxShape.circle, color: c.primary),
+                          ),
+                        ],
                       ],
                     ),
                   ),
-
-                  const SizedBox(height: 24),
-
-                  _toggleCard(
-                    icon: Icons.shopping_bag_outlined,
-                    title: 'Захиалгын мэдэгдэл',
-                    subtitle: 'Захиалга батлагдах, хүргэгдэх үед мэдэгдэл авах',
-                    value: _orderNotif,
-                    onChanged: (v) {
-                      setState(() => _orderNotif = v);
-                      _save();
-                    },
-                  ),
-
-                  _toggleCard(
-                    icon: Icons.local_offer_outlined,
-                    title: 'Урамшуулал & Хямдрал',
-                    subtitle: 'Тусгай санал, хямдралын мэдэгдэл авах',
-                    value: _promoNotif,
-                    onChanged: (v) {
-                      setState(() => _promoNotif = v);
-                      _save();
-                    },
-                  ),
-
-                  _toggleCard(
-                    icon: Icons.newspaper_outlined,
-                    title: 'Шинэ бараа',
-                    subtitle: 'Шинэ аниме бараа нэмэгдэх үед мэдэгдэл авах',
-                    value: _newsNotif,
-                    onChanged: (v) {
-                      setState(() => _newsNotif = v);
-                      _save();
-                    },
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // All off button
-                  if (_orderNotif || _promoNotif || _newsNotif)
-                    GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _orderNotif = false;
-                          _promoNotif = false;
-                          _newsNotif  = false;
-                        });
-                        _save();
-                      },
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        decoration: BoxDecoration(
-                          color: AppTheme.surface,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppTheme.border),
-                        ),
-                        child: const Center(
-                          child: Text('Бүх мэдэгдэл унтраах',
-                              style: TextStyle(
-                                  color: AppTheme.textSecondary,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600)),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-    );
-  }
-
-  Widget _toggleCard({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-  }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 6,
-              offset: const Offset(0, 2))
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: value
-                  ? AppTheme.primary.withValues(alpha: 0.1)
-                  : AppTheme.cardColor,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon,
-                color: value ? AppTheme.primary : AppTheme.textSecondary,
-                size: 20),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title,
-                    style: TextStyle(
-                        color: value
-                            ? AppTheme.textPrimary
-                            : AppTheme.textSecondary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600)),
-                const SizedBox(height: 3),
-                Text(subtitle,
-                    style: const TextStyle(
-                        color: AppTheme.textSecondary, fontSize: 11)),
-              ],
-            ),
-          ),
-          Switch(
-            value: value,
-            onChanged: onChanged,
-            activeThumbColor: AppTheme.primary,
-            activeTrackColor: AppTheme.primary.withValues(alpha: 0.3),
-          ),
-        ],
+                ),
+              );
+            },
+          );
+        },
       ),
     );
   }

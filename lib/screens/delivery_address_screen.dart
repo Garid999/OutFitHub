@@ -11,13 +11,15 @@ class DeliveryAddressScreen extends StatefulWidget {
 }
 
 class _DeliveryAddressScreenState extends State<DeliveryAddressScreen> {
+  AppColors c = AppColors.light;
+
   final _cityCtrl     = TextEditingController();
   final _districtCtrl = TextEditingController();
   final _khorooCtrl   = TextEditingController();
   final _streetCtrl   = TextEditingController();
   final _floorCtrl    = TextEditingController();
   final _doorCtrl     = TextEditingController();
-  bool _isLoading = false;
+  bool _isLoading  = false;
   bool _isFetching = true;
 
   @override
@@ -42,9 +44,7 @@ class _DeliveryAddressScreenState extends State<DeliveryAddressScreen> {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid == null) return;
       final snap = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .get();
+          .collection('users').doc(uid).get();
       final addr = snap.data()?['address'] as Map<String, dynamic>?;
       if (addr != null && mounted) {
         setState(() {
@@ -81,7 +81,7 @@ class _DeliveryAddressScreenState extends State<DeliveryAddressScreen> {
       if (!mounted) return;
       _snack('Хаяг амжилттай хадгалагдлаа');
       Navigator.pop(context);
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
       _snack('Алдаа гарлаа');
     } finally {
@@ -90,17 +90,16 @@ class _DeliveryAddressScreenState extends State<DeliveryAddressScreen> {
   }
 
   void _snack(String msg) => ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(msg), backgroundColor: AppTheme.primary),
-      );
+      SnackBar(content: Text(msg), backgroundColor: c.primary));
 
   @override
   Widget build(BuildContext context) {
+    c = context.c;
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: c.background,
       appBar: AppBar(title: const Text('Хүргэлтийн хаяг')),
       body: _isFetching
-          ? const Center(
-              child: CircularProgressIndicator(color: AppTheme.primary))
+          ? Center(child: CircularProgressIndicator(color: c.primary))
           : SingleChildScrollView(
               padding: const EdgeInsets.all(20),
               child: Column(
@@ -110,21 +109,20 @@ class _DeliveryAddressScreenState extends State<DeliveryAddressScreen> {
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: AppTheme.primary.withValues(alpha: 0.06),
+                      color: c.primary.withValues(alpha: 0.06),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                          color: AppTheme.primary.withValues(alpha: 0.2)),
+                      border: Border.all(color: c.primary.withValues(alpha: 0.2)),
                     ),
-                    child: const Row(
+                    child: Row(
                       children: [
                         Icon(Icons.location_on_outlined,
-                            color: AppTheme.primary, size: 20),
-                        SizedBox(width: 10),
+                            color: c.primary, size: 20),
+                        const SizedBox(width: 10),
                         Expanded(
                           child: Text(
                             'Захиалга хийхэд энэ хаяг ашиглагдана',
                             style: TextStyle(
-                                color: AppTheme.primary,
+                                color: c.primary,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w500),
                           ),
@@ -137,45 +135,36 @@ class _DeliveryAddressScreenState extends State<DeliveryAddressScreen> {
 
                   Row(
                     children: [
-                      Expanded(
-                          child: _field('Хот / Аймаг', _cityCtrl,
-                              Icons.location_city_outlined,
-                              hint: 'Улаанбаатар')),
+                      Expanded(child: _field('Хот / Аймаг', _cityCtrl,
+                          Icons.location_city_outlined, hint: 'Улаанбаатар')),
                       const SizedBox(width: 12),
-                      Expanded(
-                          child: _field('Дүүрэг / Сум', _districtCtrl,
-                              Icons.map_outlined,
-                              hint: 'Сүхбаатар')),
+                      Expanded(child: _field('Дүүрэг / Сум', _districtCtrl,
+                          Icons.map_outlined, hint: 'Сүхбаатар')),
                     ],
                   ),
                   const SizedBox(height: 16),
 
                   Row(
                     children: [
-                      Expanded(
-                          child: _field('Хороо', _khorooCtrl,
-                              Icons.grid_view_outlined,
-                              hint: '1-р хороо', keyType: TextInputType.number)),
+                      Expanded(child: _field('Хороо', _khorooCtrl,
+                          Icons.grid_view_outlined,
+                          hint: '1-р хороо', keyType: TextInputType.number)),
                       const SizedBox(width: 12),
-                      Expanded(
-                          child: _field('Байр / Гудамж', _streetCtrl,
-                              Icons.home_outlined,
-                              hint: 'Найрамдал байр')),
+                      Expanded(child: _field('Байр / Гудамж', _streetCtrl,
+                          Icons.home_outlined, hint: 'Найрамдал байр')),
                     ],
                   ),
                   const SizedBox(height: 16),
 
                   Row(
                     children: [
-                      Expanded(
-                          child: _field('Давхар', _floorCtrl,
-                              Icons.layers_outlined,
-                              hint: '3', keyType: TextInputType.number)),
+                      Expanded(child: _field('Давхар', _floorCtrl,
+                          Icons.layers_outlined,
+                          hint: '3', keyType: TextInputType.number)),
                       const SizedBox(width: 12),
-                      Expanded(
-                          child: _field('Тоот', _doorCtrl,
-                              Icons.door_front_door_outlined,
-                              hint: '42', keyType: TextInputType.number)),
+                      Expanded(child: _field('Тоот', _doorCtrl,
+                          Icons.door_front_door_outlined,
+                          hint: '42', keyType: TextInputType.number)),
                     ],
                   ),
 
@@ -187,33 +176,31 @@ class _DeliveryAddressScreenState extends State<DeliveryAddressScreen> {
                       margin: const EdgeInsets.only(top: 8),
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: AppTheme.surface,
+                        color: c.surface,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppTheme.border),
+                        border: Border.all(color: c.border),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Row(
+                          Row(
                             children: [
                               Icon(Icons.preview_outlined,
-                                  color: AppTheme.primary, size: 16),
-                              SizedBox(width: 6),
+                                  color: c.primary, size: 16),
+                              const SizedBox(width: 6),
                               Text('Хаягийн дэлгэрэнгүй',
                                   style: TextStyle(
-                                      color: AppTheme.primary,
+                                      color: c.primary,
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600)),
                             ],
                           ),
                           const SizedBox(height: 8),
-                          Text(
-                            _buildPreview(),
-                            style: const TextStyle(
-                                color: AppTheme.textPrimary,
-                                fontSize: 13,
-                                height: 1.6),
-                          ),
+                          Text(_buildPreview(),
+                              style: TextStyle(
+                                  color: c.textPrimary,
+                                  fontSize: 13,
+                                  height: 1.6)),
                         ],
                       ),
                     ),
@@ -221,9 +208,7 @@ class _DeliveryAddressScreenState extends State<DeliveryAddressScreen> {
                   const SizedBox(height: 32),
 
                   _isLoading
-                      ? const Center(
-                          child: CircularProgressIndicator(
-                              color: AppTheme.primary))
+                      ? Center(child: CircularProgressIndicator(color: c.primary))
                       : ElevatedButton.icon(
                           onPressed: _save,
                           icon: const Icon(Icons.save_outlined,
@@ -259,8 +244,8 @@ class _DeliveryAddressScreenState extends State<DeliveryAddressScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label,
-            style: const TextStyle(
-                color: AppTheme.textPrimary,
+            style: TextStyle(
+                color: c.textPrimary,
                 fontSize: 12,
                 fontWeight: FontWeight.w600)),
         const SizedBox(height: 6),
@@ -268,25 +253,24 @@ class _DeliveryAddressScreenState extends State<DeliveryAddressScreen> {
           controller: ctrl,
           keyboardType: keyType,
           onChanged: (_) => setState(() {}),
-          style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14),
+          style: TextStyle(color: c.textPrimary, fontSize: 14),
           decoration: InputDecoration(
-            prefixIcon: Icon(icon, color: AppTheme.primary, size: 18),
+            prefixIcon: Icon(icon, color: c.primary, size: 18),
             hintText: hint,
-            hintStyle: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+            hintStyle: TextStyle(color: c.textSecondary, fontSize: 13),
             filled: true,
-            fillColor: AppTheme.surface,
+            fillColor: c.surface,
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppTheme.border)),
+                borderSide: BorderSide(color: c.border)),
             enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppTheme.border)),
+                borderSide: BorderSide(color: c.border)),
             focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide:
-                    const BorderSide(color: AppTheme.primary, width: 1.5)),
+                borderSide: BorderSide(color: c.primary, width: 1.5)),
           ),
         ),
       ],

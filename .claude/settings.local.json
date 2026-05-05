@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(flutter pub *)",
+      "Bash(flutter analyze *)",
+      "Bash(keytool -genkey -v -keystore \"c:/Users/Dell/Desktop/Project Main/outfithub/android/app/outfithub-release.jks\" -keyalg RSA -keysize 2048 -validity 10000 -alias outfithub -storepass \"admin@123\" -keypass \"admin@123\" -dname \"CN=Garid Gantumur, OU=OutfitHub, O=OutfitHub, L=Ulaanbaatar, ST=Ulaanbaatar, C=MN\")",
+      "PowerShell(& \"C:\\\\Program Files\\\\Android\\\\Android Studio\\\\jbr\\\\bin\\\\keytool.exe\" -genkey -v -keystore \"c:\\\\Users\\\\Dell\\\\Desktop\\\\Project Main\\\\outfithub\\\\android\\\\app\\\\outfithub-release.jks\" -keyalg RSA -keysize 2048 -validity 10000 -alias outfithub -storepass \"admin@123\" -keypass \"admin@123\" -dname \"CN=Garid Gantumur, OU=OutfitHub, O=OutfitHub, L=Ulaanbaatar, ST=Ulaanbaatar, C=MN\")",
+      "PowerShell(Rename-Item \"c:\\\\Users\\\\Dell\\\\Desktop\\\\Project Main\\\\outfithub\" \"c:\\\\Users\\\\Dell\\\\Desktop\\\\Project Main\\\\AnimeStore\")",
+      "Bash(flutter clean *)",
+      "Bash(flutter build *)",
+      "Bash(start ms-settings:developers)",
+      "Bash(./gradlew bundleRelease)",
+      "Bash(powershell -Command 'Add-Type -Assembly '\\\\''System.IO.Compression.FileSystem'\\\\''; $zip = [System.IO.Compression.ZipFile]::OpenRead\\('\\\\''android/app/build/outputs/bundle/release/app-release.aab'\\\\''\\); $entry = $zip.Entries | Where-Object { $_.FullName -eq '\\\\''BundleConfig.pb'\\\\'' }; $zip.Dispose\\(\\)')",
+      "Bash(./gradlew :app:bundleRelease --rerun-tasks)"
+    ]
+  }
+}

@@ -7,8 +7,10 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../models/product.dart';
 import '../utils/app_theme.dart';
 import '../utils/product_seed.dart';
+import '../utils/notifications_helper.dart';
 import 'login_screen.dart';
 import 'admin_product_form_screen.dart';
+import 'admin_event_form_screen.dart';
 
 class AdminScreen extends StatefulWidget {
   const AdminScreen({super.key});
@@ -28,7 +30,7 @@ class _AdminScreenState extends State<AdminScreen>
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 5, vsync: this);
+    _tabCtrl = TabController(length: 6, vsync: this);
     _revenueMonth = _monthKey(DateTime.now());
   }
 
@@ -132,6 +134,37 @@ class _AdminScreenState extends State<AdminScreen>
         .update({'status': status});
 
     if (status == 'accepted') await _decreaseStock(orderId);
+    await _notifyOrderStatus(orderId, status);
+  }
+
+  Future<void> _notifyOrderStatus(String orderId, String status) async {
+    final snap = await FirebaseFirestore.instance
+        .collection('orders').doc(orderId).get();
+    final data = snap.data();
+    if (data == null) return;
+    final uid       = data['userId']      as String? ?? '';
+    final orderNum  = data['orderNumber'] as String? ?? orderId;
+    if (uid.isEmpty) return;
+
+    late String title, body;
+    switch (status) {
+      case 'accepted':
+        title = '✅ Захиалга баталгаажлаа';
+        body  = '$orderNum захиалга баталгаажсан. 3 хоногт хүргэгдэнэ.';
+        break;
+      case 'delivered':
+        title = '📦 Захиалга хүргэгдлээ';
+        body  = '$orderNum захиалга амжилттай хүргэгдлээ!';
+        break;
+      case 'removed':
+        title = '❌ Захиалга цуцлагдлаа';
+        body  = '$orderNum захиалга цуцлагдсан. Дэлгэрэнгүй мэдээлэлд холбоо барина уу.';
+        break;
+      default: return;
+    }
+    await NotifHelper.sendToUser(uid,
+        type: 'order_update', title: title, body: body,
+        data: {'orderId': orderId, 'status': status});
   }
 
   Future<void> _decreaseStock(String orderId) async {
@@ -409,6 +442,7 @@ class _AdminScreenState extends State<AdminScreen>
             Tab(icon: Icon(Icons.local_shipping_rounded, size: 18), text: 'Хүргэлт'),
             Tab(icon: Icon(Icons.people_rounded, size: 18), text: 'Хэрэглэгчид'),
             Tab(icon: Icon(Icons.inventory_2_rounded, size: 18), text: 'Бараа'),
+            Tab(icon: Icon(Icons.local_offer_rounded, size: 18), text: 'Event'),
             Tab(icon: Icon(Icons.chat_rounded, size: 18), text: 'Чат'),
           ],
         ),
@@ -420,22 +454,33 @@ class _AdminScreenState extends State<AdminScreen>
           _buildDeliveryTab(),
           _buildUsersTab(),
           _buildProductsTab(),
+          _buildEventsTab(),
           _buildChatTab(),
         ],
       ),
       floatingActionButton: ListenableBuilder(
         listenable: _tabCtrl,
-        builder: (_, __) => _tabCtrl.index == 3
-            ? FloatingActionButton(
-                backgroundColor: const Color(0xFFE53935),
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) => const AdminProductFormScreen()),
-                ),
-                child: const Icon(Icons.add_rounded, color: Colors.white),
-              )
-            : const SizedBox.shrink(),
+        builder: (_, __) {
+          if (_tabCtrl.index == 3) {
+            return FloatingActionButton(
+              backgroundColor: const Color(0xFFE53935),
+              onPressed: () => Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const AdminProductFormScreen())),
+              child: const Icon(Icons.add_rounded, color: Colors.white),
+            );
+          }
+          if (_tabCtrl.index == 4) {
+            return FloatingActionButton.extended(
+              backgroundColor: const Color(0xFFE53935),
+              onPressed: () => Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const AdminEventFormScreen())),
+              icon: const Icon(Icons.add_rounded, color: Colors.white),
+              label: const Text('Шинэ event',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            );
+          }
+          return const SizedBox.shrink();
+        },
       ),
     );
   }
@@ -872,12 +917,26 @@ class _AdminScreenState extends State<AdminScreen>
               child: ListView.builder(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
                 itemCount: list.length,
-                itemBuilder: (_, i) => _buildUserCard(list[i]),
+                itemBuilder: (_, i) => GestureDetector(
+                  onTap: () => _showUserDetail(list[i]),
+                  child: _buildUserCard(list[i]),
+                ),
               ),
             ),
           ],
         );
       },
+    );
+  }
+
+  void _showUserDetail(_CustomerInfo info) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1E1E1E),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => _UserDetailSheet(info: info),
     );
   }
 
@@ -1164,7 +1223,166 @@ class _AdminScreenState extends State<AdminScreen>
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // TAB 4 — Chat
+  // ══════════════════════════════════════════════════════════════════════════
+  // TAB 4 — Events
+  // ══════════════════════════════════════════════════════════════════════════
+
+  Widget _buildEventsTab() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('events')
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
+      builder: (_, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Center(
+              child: CircularProgressIndicator(color: Color(0xFFE53935)));
+        }
+        final docs = snap.data?.docs ?? [];
+        if (docs.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.local_offer_outlined,
+                    color: Colors.grey, size: 64),
+                const SizedBox(height: 16),
+                const Text('Арга хэмжээ байхгүй',
+                    style: TextStyle(color: Colors.grey, fontSize: 16)),
+                const SizedBox(height: 8),
+                const Text('+ товч дарж шинэ event үүсгэнэ',
+                    style: TextStyle(color: Color(0xFF555555), fontSize: 12)),
+              ],
+            ),
+          );
+        }
+        return ListView.builder(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+          itemCount: docs.length,
+          itemBuilder: (_, i) {
+            final d     = docs[i].data() as Map<String, dynamic>;
+            final title = d['title']        as String? ?? '';
+            final desc  = d['description'] as String? ?? '';
+            final type  = d['discountType'] as String? ?? 'percent';
+            final val   = (d['discountValue'] as num?)?.toInt() ?? 0;
+            final cat   = d['category']    as String? ?? 'Бүгд';
+            final start = (d['startDate']  as Timestamp?)?.toDate();
+            final end   = (d['endDate']    as Timestamp?)?.toDate();
+            final active = d['isActive']   as bool? ?? true;
+
+            final discountStr = type == 'percent'
+                ? '$val%'
+                : '$val₮';
+
+            String dateStr = '';
+            if (start != null && end != null) {
+              dateStr = '${start.month}/${start.day} – ${end.month}/${end.day}';
+            }
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E1E1E),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: active
+                      ? const Color(0xFFE53935).withValues(alpha: 0.4)
+                      : const Color(0xFF2A2A2A),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE53935).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(discountStr,
+                            style: const TextStyle(
+                                color: Color(0xFFE53935),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14)),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(title,
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis),
+                      ),
+                      if (!active)
+                        const Text('Дууссан',
+                            style: TextStyle(color: Colors.grey, fontSize: 11)),
+                    ],
+                  ),
+                  if (desc.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(desc,
+                        style: const TextStyle(
+                            color: Colors.grey, fontSize: 12),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis),
+                  ],
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(Icons.category_outlined,
+                          color: Colors.grey[700], size: 13),
+                      const SizedBox(width: 4),
+                      Text(cat,
+                          style: const TextStyle(
+                              color: Colors.grey, fontSize: 11)),
+                      const Spacer(),
+                      Icon(Icons.calendar_today_rounded,
+                          color: Colors.grey[700], size: 13),
+                      const SizedBox(width: 4),
+                      Text(dateStr,
+                          style: const TextStyle(
+                              color: Colors.grey, fontSize: 11)),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(
+                            color: active
+                                ? Colors.grey[700]!
+                                : Colors.grey[800]!),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: () => FirebaseFirestore.instance
+                          .collection('events')
+                          .doc(docs[i].id)
+                          .update({'isActive': !active}),
+                      child: Text(
+                          active ? 'Идэвхгүй болгох' : 'Дахин идэвхжүүлэх',
+                          style: TextStyle(
+                              color: Colors.grey[600], fontSize: 12)),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // TAB 5 — Chat
   // ══════════════════════════════════════════════════════════════════════════
 
   Widget _buildChatTab() {
@@ -2428,4 +2646,268 @@ class _ProductInventoryCardState extends State<_ProductInventoryCard> {
           onPressed: onTap,
           visualDensity: VisualDensity.compact,
           padding: const EdgeInsets.all(4));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// User detail bottom sheet
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _UserDetailSheet extends StatelessWidget {
+  final _CustomerInfo info;
+  const _UserDetailSheet({required this.info});
+
+  String _fmt(int v) => v
+      .toString()
+      .replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},');
+
+  @override
+  Widget build(BuildContext context) {
+    final displayId = 'U-${info.uid.substring(0, 6).toUpperCase()}';
+    final initial   = info.phone.isNotEmpty ? info.phone[0] : '#';
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.6,
+      minChildSize: 0.4,
+      maxChildSize: 0.9,
+      expand: false,
+      builder: (_, ctrl) => SingleChildScrollView(
+        controller: ctrl,
+        child: Column(
+          children: [
+            // Handle
+            const SizedBox(height: 10),
+            Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(
+                  color: Colors.grey[700],
+                  borderRadius: BorderRadius.circular(2)),
+            ),
+            const SizedBox(height: 20),
+
+            // Avatar
+            CircleAvatar(
+              radius: 36,
+              backgroundColor: const Color(0xFFE53935).withValues(alpha: 0.15),
+              child: Text(initial,
+                  style: const TextStyle(
+                      color: Color(0xFFE53935),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 28)),
+            ),
+            const SizedBox(height: 12),
+            Text(info.phone.isNotEmpty ? info.phone : 'Утас байхгүй',
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18)),
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE53935).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(displayId,
+                  style: const TextStyle(
+                      color: Color(0xFFE53935),
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1)),
+            ),
+            const SizedBox(height: 24),
+
+            // Stats row
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Row(
+                children: [
+                  _statBox('Захиалга', '${info.totalOrders}'),
+                  const SizedBox(width: 12),
+                  _statBox('Нийт зарцуулсан',
+                      info.totalSpent > 0 ? '${_fmt(info.totalSpent)}₮' : '—'),
+                  const SizedBox(width: 12),
+                  _statBox('Сүүлийн захиалга',
+                      info.lastOrderAt != null
+                          ? '${info.lastOrderAt!.month}/${info.lastOrderAt!.day}'
+                          : '—'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Info rows
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Column(
+                children: [
+                  if (info.phone.isNotEmpty)
+                    _infoRow(Icons.phone_outlined, 'Утасны дугаар', info.phone),
+                  if (info.address.isNotEmpty)
+                    _infoRow(Icons.location_on_outlined, 'Хаяг', info.address),
+                  _infoRow(Icons.fingerprint_rounded, 'UID', info.uid),
+                ],
+              ),
+            ),
+
+            // Orders section header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.receipt_long_outlined,
+                      color: Color(0xFFE53935), size: 16),
+                  const SizedBox(width: 8),
+                  const Text('Захиалгын түүх',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14)),
+                ],
+              ),
+            ),
+
+            // Recent orders from Firestore
+            StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('orders')
+                  .where('userId', isEqualTo: info.uid)
+                  .orderBy('createdAt', descending: true)
+                  .limit(5)
+                  .snapshots(),
+              builder: (_, snap) {
+                final docs = snap.data?.docs ?? [];
+                if (docs.isEmpty) {
+                  return Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text('Захиалга байхгүй',
+                        style: TextStyle(color: Colors.grey[600])),
+                  );
+                }
+                return Column(
+                  children: docs.map((doc) {
+                    final d       = doc.data() as Map<String, dynamic>;
+                    final oNum    = d['orderNumber'] as String? ?? '—';
+                    final status  = d['status']      as String? ?? 'pending';
+                    final total   = (d['totalAmount'] as num?)?.toInt() ?? 0;
+                    final ts      = (d['createdAt'] as Timestamp?)?.toDate();
+                    final dateStr = ts != null
+                        ? '${ts.year}.${ts.month.toString().padLeft(2,'0')}.${ts.day.toString().padLeft(2,'0')}'
+                        : '';
+
+                    Color sc;
+                    String sl;
+                    switch (status) {
+                      case 'accepted':  sc = Colors.green;      sl = 'Баталгаажсан'; break;
+                      case 'delivered': sc = Colors.teal;       sl = 'Хүргэгдсэн';   break;
+                      case 'removed':   sc = Colors.redAccent;  sl = 'Цуцлагдсан';   break;
+                      default:          sc = Colors.orange;     sl = 'Хүлээгдэж буй';
+                    }
+
+                    return Container(
+                      margin: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2A2A2A),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(oNum,
+                                    style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13)),
+                                if (dateStr.isNotEmpty)
+                                  Text(dateStr,
+                                      style: const TextStyle(
+                                          color: Colors.grey, fontSize: 11)),
+                              ],
+                            ),
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: sc.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(sl,
+                                    style: TextStyle(
+                                        color: sc,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold)),
+                              ),
+                              const SizedBox(height: 4),
+                              Text('${_fmt(total)}₮',
+                                  style: const TextStyle(
+                                      color: Color(0xFFE53935),
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                );
+              },
+            ),
+            const SizedBox(height: 32),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _statBox(String label, String value) => Expanded(
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF2A2A2A),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            children: [
+              Text(value,
+                  style: const TextStyle(
+                      color: Color(0xFFE53935),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16)),
+              const SizedBox(height: 4),
+              Text(label,
+                  style: const TextStyle(color: Colors.grey, fontSize: 10),
+                  textAlign: TextAlign.center),
+            ],
+          ),
+        ),
+      );
+
+  Widget _infoRow(IconData icon, String label, String value) => Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF2A2A2A),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: Colors.grey, size: 16),
+            const SizedBox(width: 10),
+            Text('$label: ',
+                style: const TextStyle(color: Colors.grey, fontSize: 12)),
+            Expanded(
+              child: Text(value,
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                  overflow: TextOverflow.ellipsis),
+            ),
+          ],
+        ),
+      );
 }
