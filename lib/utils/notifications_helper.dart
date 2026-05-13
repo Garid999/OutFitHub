@@ -89,4 +89,55 @@ class NotifHelper {
     }
     await batch.commit();
   }
+
+  // Delete all notifications for a single user
+  static Future<void> deleteAll(String uid) async {
+    if (uid.isEmpty) return;
+    final snap = await _db
+        .collection('users')
+        .doc(uid)
+        .collection('notifications')
+        .get();
+    if (snap.docs.isEmpty) return;
+    var batch = _db.batch();
+    int count = 0;
+    for (final d in snap.docs) {
+      batch.delete(d.reference);
+      count++;
+      if (count == 499) {
+        await batch.commit();
+        batch = _db.batch();
+        count = 0;
+      }
+    }
+    if (count > 0) await batch.commit();
+  }
+
+  // Force delete ALL notifications for ALL users (admin only)
+  static Future<int> deleteAllForAllUsers() async {
+    final users = await _db.collection('users').get();
+    int totalDeleted = 0;
+    for (final user in users.docs) {
+      final snap = await _db
+          .collection('users')
+          .doc(user.id)
+          .collection('notifications')
+          .get();
+      if (snap.docs.isEmpty) continue;
+      var batch = _db.batch();
+      int count = 0;
+      for (final d in snap.docs) {
+        batch.delete(d.reference);
+        count++;
+        totalDeleted++;
+        if (count == 499) {
+          await batch.commit();
+          batch = _db.batch();
+          count = 0;
+        }
+      }
+      if (count > 0) await batch.commit();
+    }
+    return totalDeleted;
+  }
 }

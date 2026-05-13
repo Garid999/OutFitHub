@@ -1227,6 +1227,79 @@ class _AdminScreenState extends State<AdminScreen>
   // TAB 4 — Events
   // ══════════════════════════════════════════════════════════════════════════
 
+  Future<void> _forceDeleteAllNotifications() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_rounded, color: Colors.red, size: 22),
+            SizedBox(width: 8),
+            Text('Бүх мэдэгдэл устгах',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
+          ],
+        ),
+        content: const Text(
+          'БҮХИЙ Л хэрэглэгчдийн мэдэгдлийг устгана.\nЭнэ үйлдлийг буцаах боломжгүй.',
+          style: TextStyle(color: Colors.white70, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Болих', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Устгах',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    // Show loading
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(children: [
+            SizedBox(width: 18, height: 18,
+                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)),
+            SizedBox(width: 12),
+            Text('Мэдэгдэл устгаж байна...'),
+          ]),
+          duration: Duration(seconds: 30),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+
+    try {
+      final count = await NotifHelper.deleteAllForAllUsers();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✓ $count мэдэгдэл бүх хэрэглэгчээс устгагдлаа'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Алдаа: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
   Widget _buildEventsTab() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
@@ -1239,25 +1312,71 @@ class _AdminScreenState extends State<AdminScreen>
               child: CircularProgressIndicator(color: Color(0xFFE53935)));
         }
         final docs = snap.data?.docs ?? [];
-        if (docs.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.local_offer_outlined,
-                    color: Colors.grey, size: 64),
-                const SizedBox(height: 16),
-                const Text('Арга хэмжээ байхгүй',
-                    style: TextStyle(color: Colors.grey, fontSize: 16)),
-                const SizedBox(height: 8),
-                const Text('+ товч дарж шинэ event үүсгэнэ',
-                    style: TextStyle(color: Color(0xFF555555), fontSize: 12)),
-              ],
+
+        return Column(
+          children: [
+            // ── Force delete notifications danger button ────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+              child: InkWell(
+                onTap: _forceDeleteAllNotifications,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.red.withValues(alpha: 0.5)),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.delete_forever_rounded, color: Colors.red, size: 20),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Бүх мэдэгдэл устгах',
+                                style: TextStyle(
+                                    color: Colors.red,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 13)),
+                            Text('Бүхий л хэрэглэгчдийн мэдэгдлийг нэгэн зэрэг устгана',
+                                style: TextStyle(color: Colors.red, fontSize: 11),
+                                overflow: TextOverflow.ellipsis),
+                          ],
+                        ),
+                      ),
+                      Icon(Icons.chevron_right_rounded, color: Colors.red, size: 18),
+                    ],
+                  ),
+                ),
+              ),
             ),
-          );
-        }
-        return ListView.builder(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+            const SizedBox(height: 8),
+
+            if (docs.isEmpty)
+              const Expanded(
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.local_offer_outlined, color: Colors.grey, size: 64),
+                      SizedBox(height: 16),
+                      Text('Арга хэмжээ байхгүй',
+                          style: TextStyle(color: Colors.grey, fontSize: 16)),
+                      SizedBox(height: 8),
+                      Text('+ товч дарж шинэ event үүсгэнэ',
+                          style: TextStyle(color: Color(0xFF555555), fontSize: 12)),
+                    ],
+                  ),
+                ),
+              )
+            else
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
           itemCount: docs.length,
           itemBuilder: (_, i) {
             final d     = docs[i].data() as Map<String, dynamic>;
@@ -1377,6 +1496,9 @@ class _AdminScreenState extends State<AdminScreen>
               ),
             );
           },
+              ),
+            ),
+          ],
         );
       },
     );

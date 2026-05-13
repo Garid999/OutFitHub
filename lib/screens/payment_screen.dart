@@ -124,12 +124,13 @@ class _PaymentScreenState extends State<PaymentScreen>
       await FirebaseFirestore.instance.collection('orders').add({
         'orderNumber': orderNum,
         'items': widget.cartItems.map((p) => {
-              'productId': p.id,
-              'name':      p.name,
-              'category':  p.category,
-              'size':      p.selectedSize ?? 'M',
-              'imageUrl':  p.imageUrl,
-              'priceMNT':  (p.price * 1000).round(),
+              'productId':         p.id,
+              'name':              p.name,
+              'category':          p.category,
+              'size':              p.selectedSize ?? 'M',
+              'imageUrl':          p.imageUrl,
+              'priceMNT':          p.discountedPriceMNT?.toInt() ?? (p.price * 1000).round(),
+              'originalPriceMNT':  (p.price * 1000).round(),
             }).toList(),
         'subtotal':      widget.subtotal,
         'deliveryFee':   PaymentScreen.kDeliveryFee,
@@ -357,12 +358,24 @@ class _PaymentScreenState extends State<PaymentScreen>
                       ),
                     ),
                     SizedBox(width: 8),
-                    // Price
-                    Text('${_fmt((p.price * 1000).round())}₮',
-                        style: TextStyle(
-                            color: c.primary,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700)),
+                    // Price (discounted if applicable)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          '${_fmt(p.discountedPriceMNT?.toInt() ?? (p.price * 1000).round())}₮',
+                          style: TextStyle(
+                              color: c.primary,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700)),
+                        if (p.discountedPriceMNT != null)
+                          Text('${_fmt((p.price * 1000).round())}₮',
+                              style: TextStyle(
+                                  color: c.textSecondary,
+                                  fontSize: 11,
+                                  decoration: TextDecoration.lineThrough)),
+                      ],
+                    ),
                   ],
                 ),
               )),
@@ -798,11 +811,23 @@ class _PaymentScreenState extends State<PaymentScreen>
                                     ],
                                   ),
                                 ),
-                                Text('${_fmt((p.price * 1000).round())}₮',
-                                    style: TextStyle(
-                                        color: c.textPrimary,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600)),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      '${_fmt(p.discountedPriceMNT?.toInt() ?? (p.price * 1000).round())}₮',
+                                      style: TextStyle(
+                                          color: c.textPrimary,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600)),
+                                    if (p.discountedPriceMNT != null)
+                                      Text('${_fmt((p.price * 1000).round())}₮',
+                                          style: TextStyle(
+                                              color: c.textSecondary,
+                                              fontSize: 10,
+                                              decoration: TextDecoration.lineThrough)),
+                                  ],
+                                ),
                               ],
                             ),
                           )),

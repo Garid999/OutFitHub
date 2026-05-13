@@ -131,13 +131,19 @@ class _HomeScreenState extends State<HomeScreen> {
         .listen((s) {
       if (!mounted) return;
       final now = DateTime.now();
-      setState(() => _activeEvents = s.docs
-          .map((d) => {'id': d.id, ...d.data()})
-          .where((e) {
-            final end = (e['endDate'] as Timestamp?)?.toDate();
-            return end == null || end.isAfter(now);
-          })
-          .toList());
+      setState(() {
+        _activeEvents = s.docs
+            .map((d) => {'id': d.id, ...d.data()})
+            .where((e) {
+              final end = (e['endDate'] as Timestamp?)?.toDate();
+              return end == null || end.isAfter(now);
+            })
+            .toList();
+        // Re-apply (or clear) discounts on existing cart items when events change
+        for (int i = 0; i < _cartItems.length; i++) {
+          _cartItems[i] = _cartItems[i].withDiscount(_discountedPrice(_cartItems[i]));
+        }
+      });
     });
   }
 
@@ -204,7 +210,10 @@ class _HomeScreenState extends State<HomeScreen> {
       final size = entry.substring(idx + 1);
       try {
         final product = _products.firstWhere((p) => p.id == id);
-        items.add(product.withSize(size));
+        final discMNT = _discountedPrice(product);
+        items.add(discMNT != null
+            ? product.withSize(size).withDiscount(discMNT)
+            : product.withSize(size));
       } catch (_) {}
     }
     if (items.isNotEmpty && mounted) {
@@ -279,7 +288,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _addToCart(Product product, String size) {
-    setState(() => _cartItems.add(product.withSize(size)));
+    final discMNT = _discountedPrice(product);
+    final cartProduct = discMNT != null
+        ? product.withSize(size).withDiscount(discMNT)
+        : product.withSize(size);
+    setState(() => _cartItems.add(cartProduct));
     _saveCart();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -580,7 +593,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         actions: [
           // Notification bell
-          _NotificationBell(c: c),
+          _NotificationBell(c: c, onAddToCart: _addToCart),
           // Cart
           Stack(
             children: [
@@ -637,7 +650,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
 class _NotificationBell extends StatelessWidget {
   final AppColors c;
-  const _NotificationBell({required this.c});
+  final Function(Product, String) onAddToCart;
+  const _NotificationBell({required this.c, required this.onAddToCart});
 
   String get _uid => FirebaseAuth.instance.currentUser?.uid ?? '';
 
@@ -661,7 +675,7 @@ class _NotificationBell extends StatelessWidget {
               onPressed: () => Navigator.push(
                 context,
                 MaterialPageRoute(
-                    builder: (_) => const NotificationsScreen()),
+                    builder: (_) => NotificationsScreen(onAddToCart: onAddToCart)),
               ),
             ),
             if (unread > 0)

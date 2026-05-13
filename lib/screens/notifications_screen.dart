@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../models/product.dart';
 import '../utils/app_theme.dart';
 import '../utils/notifications_helper.dart';
 import 'event_detail_screen.dart';
 
 class NotificationsScreen extends StatelessWidget {
-  const NotificationsScreen({super.key});
+  final Function(Product, String)? onAddToCart;
+  const NotificationsScreen({super.key, this.onAddToCart});
 
   String get _uid => FirebaseAuth.instance.currentUser?.uid ?? '';
 
@@ -44,6 +46,35 @@ class NotificationsScreen extends StatelessWidget {
     return '${d.month}/${d.day}';
   }
 
+  void _confirmDeleteAll(BuildContext context) {
+    final c = context.c;
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: c.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Бүгдийг устгах уу?',
+            style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w800)),
+        content: Text('Бүх мэдэгдэл устгагдана. Энэ үйлдлийг буцаах боломжгүй.',
+            style: TextStyle(color: c.textSecondary)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Болих', style: TextStyle(color: c.textSecondary)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              NotifHelper.deleteAll(_uid);
+            },
+            child: const Text('Устгах',
+                style: TextStyle(color: Colors.red, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.c;
@@ -65,6 +96,11 @@ class NotificationsScreen extends StatelessWidget {
             onPressed: () => NotifHelper.markAllRead(_uid),
             child: Text('Бүгд уншсан',
                 style: TextStyle(color: c.primary, fontSize: 13)),
+          ),
+          IconButton(
+            icon: Icon(Icons.delete_sweep_rounded, color: c.textSecondary),
+            tooltip: 'Бүгдийг устгах',
+            onPressed: () => _confirmDeleteAll(context),
           ),
         ],
       ),
@@ -118,8 +154,9 @@ class NotificationsScreen extends StatelessWidget {
                               as String? ?? '';
                       if (eventId.isNotEmpty && context.mounted) {
                         Navigator.push(context, MaterialPageRoute(
-                            builder: (_) =>
-                                EventDetailScreen(eventId: eventId)));
+                            builder: (_) => EventDetailScreen(
+                                eventId: eventId,
+                                onAddToCart: onAddToCart)));
                       }
                     }
                   },
@@ -167,6 +204,21 @@ class NotificationsScreen extends StatelessWidget {
                                       fontSize: 12, height: 1.4),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis),
+                              if (type == 'event') ...[
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: [
+                                    Icon(Icons.touch_app_rounded,
+                                        color: c.primary, size: 12),
+                                    const SizedBox(width: 4),
+                                    Text('Дарж бараа үзэх',
+                                        style: TextStyle(
+                                            color: c.primary,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600)),
+                                  ],
+                                ),
+                              ],
                             ],
                           ),
                         ),

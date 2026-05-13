@@ -40,10 +40,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   @override
   Widget build(BuildContext context) {
     c = context.c;
-    final priceStr = (widget.product.price * 1000)
-        .toInt()
-        .toString()
+    String fmtPrice(int mnt) => mnt.toString()
         .replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},');
+
+    final origMNT  = (widget.product.price * 1000).toInt();
+    final priceStr = fmtPrice(origMNT);
+    final discMNT  = widget.product.discountedPriceMNT?.toInt();
 
     final hasMultiple = _images.length > 1;
 
@@ -192,13 +194,34 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         ),
                       ),
                       SizedBox(width: 12),
-                      Text(
-                        '$priceStr₮',
-                        style: TextStyle(
-                            color: c.primary,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800),
-                      ),
+                      if (discMNT != null) ...[
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              '${fmtPrice(discMNT)}₮',
+                              style: TextStyle(
+                                  color: c.primary,
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w800),
+                            ),
+                            Text(
+                              '$priceStr₮',
+                              style: TextStyle(
+                                  color: c.textSecondary,
+                                  fontSize: 13,
+                                  decoration: TextDecoration.lineThrough),
+                            ),
+                          ],
+                        ),
+                      ] else
+                        Text(
+                          '$priceStr₮',
+                          style: TextStyle(
+                              color: c.primary,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800),
+                        ),
                     ],
                   ),
                   const SizedBox(height: 10),

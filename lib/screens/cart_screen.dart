@@ -29,8 +29,16 @@ class _CartScreenState extends State<CartScreen> {
       .toString()
       .replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},');
 
+  int _effectivePriceMNT(Product p) =>
+      p.discountedPriceMNT?.toInt() ?? _toMNT(p.price);
+
   int get _subtotal =>
-      widget.cartItems.fold(0, (sum, p) => sum + _toMNT(p.price));
+      widget.cartItems.fold(0, (sum, p) => sum + _effectivePriceMNT(p));
+  int get _totalDiscount =>
+      widget.cartItems.fold(0, (sum, p) =>
+          p.discountedPriceMNT != null
+              ? sum + (_toMNT(p.price) - p.discountedPriceMNT!.toInt())
+              : sum);
   int get _total => _subtotal + kDeliveryFee;
 
   @override
@@ -170,11 +178,23 @@ class _CartScreenState extends State<CartScreen> {
                                       fontWeight: FontWeight.w600)),
                             ),
                             SizedBox(height: 8),
-                            Text('${_fmt(_toMNT(item.price))}₮',
-                                style: TextStyle(
-                                    color: c.primary,
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w800)),
+                            if (item.discountedPriceMNT != null) ...[
+                              Text('${_fmt(item.discountedPriceMNT!.toInt())}₮',
+                                  style: TextStyle(
+                                      color: c.primary,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w800)),
+                              Text('${_fmt(_toMNT(item.price))}₮',
+                                  style: TextStyle(
+                                      color: c.textSecondary,
+                                      fontSize: 11,
+                                      decoration: TextDecoration.lineThrough)),
+                            ] else
+                              Text('${_fmt(_toMNT(item.price))}₮',
+                                  style: TextStyle(
+                                      color: c.primary,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w800)),
                           ],
                         ),
                       ),
@@ -212,6 +232,11 @@ class _CartScreenState extends State<CartScreen> {
             children: [
               _summaryRow('Бараа нийт', '${_fmt(_subtotal)}₮',
                   c.textSecondary),
+              if (_totalDiscount > 0) ...[
+                SizedBox(height: 8),
+                _summaryRow('Хямдрал',
+                    '-${_fmt(_totalDiscount)}₮', Colors.green),
+              ],
               SizedBox(height: 8),
               _summaryRow('Хүргэлт (2–3 хоног)',
                   '+${_fmt(kDeliveryFee)}₮', const Color(0xFF388E3C)),

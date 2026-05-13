@@ -13,6 +13,7 @@ class Product {
   final List<String> availableSizes;
   final Map<String, int> stock;
   final bool isActive;
+  final double? discountedPriceMNT;
 
   Product({
     required this.id,
@@ -27,6 +28,7 @@ class Product {
     this.availableSizes = const ['S', 'M', 'L', 'XL', 'XXL'],
     this.stock = const {},
     this.isActive = true,
+    this.discountedPriceMNT,
   });
 
   bool get isNetworkImage => imageUrl.startsWith('http');
@@ -45,6 +47,15 @@ class Product {
         imageUrl: imageUrl, images: images, rating: rating,
         description: description, selectedSize: size,
         availableSizes: availableSizes, stock: stock, isActive: isActive,
+        discountedPriceMNT: discountedPriceMNT,
+      );
+
+  Product withDiscount(double? discMNT) => Product(
+        id: id, name: name, category: category, price: price,
+        imageUrl: imageUrl, images: images, rating: rating,
+        description: description, selectedSize: selectedSize,
+        availableSizes: availableSizes, stock: stock, isActive: isActive,
+        discountedPriceMNT: discMNT,
       );
 
   factory Product.fromFirestore(DocumentSnapshot doc) {
