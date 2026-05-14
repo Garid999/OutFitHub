@@ -827,103 +827,117 @@ class _AdminScreenState extends State<AdminScreen>
   // ══════════════════════════════════════════════════════════════════════════
 
   Widget _buildUsersTab() {
-    // Derive all customer data directly from orders — no separate
-    // `users` collection needed, so Firestore rules don't block it.
+    // Outer stream: users collection for display names
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('orders')
-          .orderBy('createdAt', descending: true)
-          .snapshots(),
-      builder: (_, snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
-          return const Center(
-              child: CircularProgressIndicator(color: Color(0xFFE53935)));
+      stream: FirebaseFirestore.instance.collection('users').snapshots(),
+      builder: (_, userSnap) {
+        // Build uid → displayName lookup
+        final nameMap = <String, String>{};
+        for (final doc in userSnap.data?.docs ?? []) {
+          final d = doc.data() as Map<String, dynamic>;
+          final name = (d['displayName'] as String?)?.trim() ?? '';
+          if (name.isNotEmpty) nameMap[doc.id] = name;
         }
 
-        final allOrders = snap.data?.docs ?? [];
+        // Inner stream: orders for transaction data
+        return StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('orders')
+              .orderBy('createdAt', descending: true)
+              .snapshots(),
+          builder: (_, snap) {
+            if (snap.connectionState == ConnectionState.waiting) {
+              return const Center(
+                  child: CircularProgressIndicator(color: Color(0xFFE53935)));
+            }
 
-        // Group by userId
-        final Map<String, _CustomerInfo> customers = {};
-        for (final doc in allOrders) {
-          final d  = doc.data() as Map<String, dynamic>;
-          final uid = d['userId'] as String? ?? '';
-          if (uid.isEmpty) continue;
+            final allOrders = snap.data?.docs ?? [];
 
-          final status = d['status'] as String? ?? '';
-          final amount = (d['totalAmount'] as num?)?.toInt() ?? 0;
-          final phone  = d['phone']   as String? ?? '';
-          final addr   = d['address'] as String? ?? '';
-          final ts     = (d['createdAt'] as Timestamp?)?.toDate();
+            // Group by userId
+            final Map<String, _CustomerInfo> customers = {};
+            for (final doc in allOrders) {
+              final d      = doc.data() as Map<String, dynamic>;
+              final uid    = d['userId'] as String? ?? '';
+              if (uid.isEmpty) continue;
 
-          if (!customers.containsKey(uid)) {
-            customers[uid] = _CustomerInfo(
-              uid: uid,
-              phone: phone,
-              address: addr,
-              lastOrderAt: ts,
-            );
-          }
-          customers[uid]!.totalOrders++;
-          if (status == 'accepted' || status == 'delivered') {
-            customers[uid]!.totalSpent += amount;
-          }
-        }
+              final status = d['status']      as String? ?? '';
+              final amount = (d['totalAmount'] as num?)?.toInt() ?? 0;
+              final phone  = d['phone']        as String? ?? '';
+              final addr   = d['address']      as String? ?? '';
+              final ts     = (d['createdAt']   as Timestamp?)?.toDate();
 
-        final list = customers.values.toList()
-          ..sort((a, b) => b.totalSpent.compareTo(a.totalSpent));
+              if (!customers.containsKey(uid)) {
+                customers[uid] = _CustomerInfo(
+                  uid:         uid,
+                  name:        nameMap[uid] ?? '',
+                  phone:       phone,
+                  address:     addr,
+                  lastOrderAt: ts,
+                );
+              }
+              customers[uid]!.totalOrders++;
+              if (status == 'accepted' || status == 'delivered') {
+                customers[uid]!.totalSpent += amount;
+              }
+            }
 
-        if (list.isEmpty) {
-          return const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.people_outline_rounded,
-                    color: Colors.grey, size: 64),
-                SizedBox(height: 16),
-                Text('Захиалга хийсэн хэрэглэгч байхгүй',
-                    style: TextStyle(color: Colors.grey, fontSize: 15)),
-              ],
-            ),
-          );
-        }
+            final list = customers.values.toList()
+              ..sort((a, b) => b.totalSpent.compareTo(a.totalSpent));
 
-        return Column(
-          children: [
-            // Header
-            Container(
-              margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E1E1E),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF2A2A2A)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.people_rounded,
-                      color: Color(0xFFE53935), size: 20),
-                  const SizedBox(width: 10),
-                  Text('${list.length} хэрэглэгч',
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14)),
-                ],
-              ),
-            ),
-
-            Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                itemCount: list.length,
-                itemBuilder: (_, i) => GestureDetector(
-                  onTap: () => _showUserDetail(list[i]),
-                  child: _buildUserCard(list[i]),
+            if (list.isEmpty) {
+              return const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.people_outline_rounded,
+                        color: Colors.grey, size: 64),
+                    SizedBox(height: 16),
+                    Text('Захиалга хийсэн хэрэглэгч байхгүй',
+                        style: TextStyle(color: Colors.grey, fontSize: 15)),
+                  ],
                 ),
-              ),
-            ),
-          ],
+              );
+            }
+
+            return Column(
+              children: [
+                // Header
+                Container(
+                  margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E1E1E),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF2A2A2A)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.people_rounded,
+                          color: Color(0xFFE53935), size: 20),
+                      const SizedBox(width: 10),
+                      Text('${list.length} хэрэглэгч',
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14)),
+                    ],
+                  ),
+                ),
+
+                Expanded(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                    itemCount: list.length,
+                    itemBuilder: (_, i) => GestureDetector(
+                      onTap: () => _showUserDetail(list[i]),
+                      child: _buildUserCard(list[i]),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -941,8 +955,9 @@ class _AdminScreenState extends State<AdminScreen>
   }
 
   Widget _buildUserCard(_CustomerInfo c) {
-    final displayId = 'U-${c.uid.substring(0, 6).toUpperCase()}';
-    final initial   = c.phone.isNotEmpty ? c.phone[0] : '#';
+    final displayId  = 'U-${c.uid.substring(0, 6).toUpperCase()}';
+    final displayName = c.name.isNotEmpty ? c.name : 'Хэрэглэгч';
+    final initial     = displayName[0].toUpperCase();
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -980,11 +995,11 @@ class _AdminScreenState extends State<AdminScreen>
                 Row(
                   children: [
                     Expanded(
-                      child: Text(c.phone,
+                      child: Text(displayName,
                           style: const TextStyle(
                               color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13),
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14),
                           overflow: TextOverflow.ellipsis),
                     ),
                     Container(
@@ -1003,13 +1018,26 @@ class _AdminScreenState extends State<AdminScreen>
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
-                if (c.address.isNotEmpty)
+                const SizedBox(height: 3),
+                if (c.phone.isNotEmpty)
+                  Row(
+                    children: [
+                      Icon(Icons.phone_outlined,
+                          color: Colors.grey[600], size: 11),
+                      const SizedBox(width: 4),
+                      Text(c.phone,
+                          style: TextStyle(
+                              color: Colors.grey[400], fontSize: 12)),
+                    ],
+                  ),
+                if (c.address.isNotEmpty) ...[
+                  const SizedBox(height: 2),
                   Text(c.address,
                       style: const TextStyle(
                           color: Colors.grey, fontSize: 11),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis),
+                ],
                 const SizedBox(height: 4),
                 Row(
                   children: [
@@ -2145,6 +2173,7 @@ class _AdminScreenState extends State<AdminScreen>
 
 class _CustomerInfo {
   final String uid;
+  String name;
   String phone;
   String address;
   DateTime? lastOrderAt;
@@ -2153,6 +2182,7 @@ class _CustomerInfo {
 
   _CustomerInfo({
     required this.uid,
+    this.name = '',
     required this.phone,
     required this.address,
     this.lastOrderAt,
@@ -2784,8 +2814,9 @@ class _UserDetailSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final displayId = 'U-${info.uid.substring(0, 6).toUpperCase()}';
-    final initial   = info.phone.isNotEmpty ? info.phone[0] : '#';
+    final displayId   = 'U-${info.uid.substring(0, 6).toUpperCase()}';
+    final displayName = info.name.isNotEmpty ? info.name : 'Хэрэглэгч';
+    final initial     = displayName[0].toUpperCase();
 
     return DraggableScrollableSheet(
       initialChildSize: 0.6,
@@ -2817,11 +2848,14 @@ class _UserDetailSheet extends StatelessWidget {
                       fontSize: 28)),
             ),
             const SizedBox(height: 12),
-            Text(info.phone.isNotEmpty ? info.phone : 'Утас байхгүй',
+            Text(displayName,
                 style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
                     fontSize: 18)),
+            const SizedBox(height: 2),
+            Text(info.phone.isNotEmpty ? info.phone : 'Утас байхгүй',
+                style: TextStyle(color: Colors.grey[400], fontSize: 13)),
             const SizedBox(height: 4),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
