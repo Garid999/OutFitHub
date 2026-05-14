@@ -2927,11 +2927,18 @@ class _UserDetailSheet extends StatelessWidget {
               stream: FirebaseFirestore.instance
                   .collection('orders')
                   .where('userId', isEqualTo: info.uid)
-                  .orderBy('createdAt', descending: true)
-                  .limit(5)
                   .snapshots(),
               builder: (_, snap) {
-                final docs = snap.data?.docs ?? [];
+                // Sort locally to avoid composite index requirement
+                final docs = [...(snap.data?.docs ?? [])]
+                  ..sort((a, b) {
+                    final ta = (a.data() as Map)['createdAt'] as Timestamp?;
+                    final tb = (b.data() as Map)['createdAt'] as Timestamp?;
+                    if (ta == null && tb == null) return 0;
+                    if (ta == null) return 1;
+                    if (tb == null) return -1;
+                    return tb.compareTo(ta);
+                  });
                 if (docs.isEmpty) {
                   return Padding(
                     padding: const EdgeInsets.all(16),
