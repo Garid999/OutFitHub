@@ -2966,54 +2966,223 @@ class _UserDetailSheet extends StatelessWidget {
                       default:          sc = Colors.orange;     sl = 'Хүлээгдэж буй';
                     }
 
+                    final items    = (d['items'] as List?)?.cast<Map>() ?? [];
+                    final subtotal = (d['subtotal']    as num?)?.toInt() ?? 0;
+                    final delivery = (d['deliveryFee'] as num?)?.toInt() ?? 5000;
+
                     return Container(
-                      margin: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                      padding: const EdgeInsets.all(12),
+                      margin: const EdgeInsets.fromLTRB(20, 0, 20, 10),
                       decoration: BoxDecoration(
                         color: const Color(0xFF2A2A2A),
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                            color: sc.withValues(alpha: 0.3), width: 1),
                       ),
-                      child: Row(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                          // ── Header ──────────────────────────────────
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+                            child: Row(
                               children: [
-                                Text(oNum,
-                                    style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 13)),
-                                if (dateStr.isNotEmpty)
-                                  Text(dateStr,
-                                      style: const TextStyle(
-                                          color: Colors.grey, fontSize: 11)),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(oNum,
+                                          style: const TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 13)),
+                                      if (dateStr.isNotEmpty)
+                                        Text(dateStr,
+                                            style: const TextStyle(
+                                                color: Colors.grey,
+                                                fontSize: 11)),
+                                    ],
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: sc.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(sl,
+                                      style: TextStyle(
+                                          color: sc,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold)),
+                                ),
                               ],
                             ),
                           ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: sc.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(8),
+
+                          // ── Divider ──────────────────────────────────
+                          Divider(
+                              color: Colors.white.withValues(alpha: 0.06),
+                              height: 1),
+
+                          // ── Items list ────────────────────────────────
+                          if (items.isEmpty)
+                            Padding(
+                              padding: const EdgeInsets.all(10),
+                              child: Text('Бараа байхгүй',
+                                  style: TextStyle(
+                                      color: Colors.grey[600],
+                                      fontSize: 11)),
+                            )
+                          else
+                            ...items.map((item) {
+                              final iName  = item['name']     as String? ?? '—';
+                              final iSize  = item['size']     as String? ?? '—';
+                              final iCat   = item['category'] as String? ?? '';
+                              final iPrice = (item['priceMNT'] as num?)?.toInt() ?? 0;
+                              final iOrig  = (item['originalPriceMNT'] as num?)?.toInt();
+                              final isDisc = iOrig != null && iOrig != iPrice;
+
+                              return Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                    12, 8, 12, 0),
+                                child: Row(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    // Size badge
+                                    Container(
+                                      width: 34,
+                                      height: 34,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFE53935)
+                                            .withValues(alpha: 0.1),
+                                        borderRadius:
+                                            BorderRadius.circular(8),
+                                        border: Border.all(
+                                            color: const Color(0xFFE53935)
+                                                .withValues(alpha: 0.3)),
+                                      ),
+                                      child: Center(
+                                        child: Text(iSize,
+                                            style: const TextStyle(
+                                                color: Color(0xFFE53935),
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 11)),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    // Name + category
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(iName,
+                                              style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 12,
+                                                  fontWeight:
+                                                      FontWeight.w600),
+                                              maxLines: 2,
+                                              overflow:
+                                                  TextOverflow.ellipsis),
+                                          if (iCat.isNotEmpty)
+                                            Text(iCat,
+                                                style: TextStyle(
+                                                    color: Colors.grey[600],
+                                                    fontSize: 10)),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    // Price (discounted or normal)
+                                    Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.end,
+                                      children: [
+                                        Text('${_fmt(iPrice)}₮',
+                                            style: TextStyle(
+                                                color: isDisc
+                                                    ? Colors.greenAccent
+                                                    : Colors.white70,
+                                                fontSize: 12,
+                                                fontWeight:
+                                                    FontWeight.bold)),
+                                        if (isDisc)
+                                          Text('${_fmt(iOrig)}₮',
+                                              style: const TextStyle(
+                                                  color: Colors.grey,
+                                                  fontSize: 10,
+                                                  decoration: TextDecoration
+                                                      .lineThrough)),
+                                      ],
+                                    ),
+                                  ],
                                 ),
-                                child: Text(sl,
-                                    style: TextStyle(
-                                        color: sc,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold)),
-                              ),
-                              const SizedBox(height: 4),
-                              Text('${_fmt(total)}₮',
-                                  style: const TextStyle(
-                                      color: Color(0xFFE53935),
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13)),
-                            ],
+                              );
+                            }),
+
+                          // ── Price breakdown ───────────────────────────
+                          Padding(
+                            padding:
+                                const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                            child: Column(
+                              children: [
+                                Divider(
+                                    color:
+                                        Colors.white.withValues(alpha: 0.06),
+                                    height: 1),
+                                const SizedBox(height: 8),
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text('Бараа нийт',
+                                        style: TextStyle(
+                                            color: Colors.grey[500],
+                                            fontSize: 11)),
+                                    Text('${_fmt(subtotal)}₮',
+                                        style: const TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 11)),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text('Хүргэлт',
+                                        style: TextStyle(
+                                            color: Colors.grey[500],
+                                            fontSize: 11)),
+                                    Text('+${_fmt(delivery)}₮',
+                                        style: const TextStyle(
+                                            color: Color(0xFF66BB6A),
+                                            fontSize: 11)),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const Text('Нийт дүн',
+                                        style: TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 13)),
+                                    Text('${_fmt(total)}₮',
+                                        style: const TextStyle(
+                                            color: Color(0xFFE53935),
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14)),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
                         ],
                       ),
