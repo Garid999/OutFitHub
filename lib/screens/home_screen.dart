@@ -14,6 +14,7 @@ import 'cart_screen.dart';
 import 'orders_screen.dart';
 import 'profile_screen.dart';
 import 'notifications_screen.dart';
+import 'wishlist_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -33,14 +34,17 @@ class _HomeScreenState extends State<HomeScreen> {
   StreamSubscription<QuerySnapshot>? _productSub;
   bool _cartLoaded = false;
   List<Map<String, dynamic>> _activeEvents = [];
+  Set<String> _wishlistIds = {};
 
   StreamSubscription<QuerySnapshot>? _eventSub;
+  StreamSubscription<QuerySnapshot>? _wishlistSub;
 
   @override
   void initState() {
     super.initState();
     _seedAndListen();
     _listenEvents();
+    _listenWishlist();
     WidgetsBinding.instance.addPostFrameCallback((_) => _showWelcomeIfNeeded());
   }
 
@@ -119,7 +123,39 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     _productSub?.cancel();
     _eventSub?.cancel();
+    _wishlistSub?.cancel();
     super.dispose();
+  }
+
+  void _listenWishlist() {
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    if (uid.isEmpty) return;
+    _wishlistSub = FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('wishlist')
+        .snapshots()
+        .listen((s) {
+      if (!mounted) return;
+      setState(() => _wishlistIds = s.docs.map((d) => d.id).toSet());
+    });
+  }
+
+  Future<void> _toggleWishlist(String productId) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    if (uid.isEmpty) return;
+    final ref = FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('wishlist')
+        .doc(productId);
+    if (_wishlistIds.contains(productId)) {
+      setState(() => _wishlistIds.remove(productId));
+      await ref.delete();
+    } else {
+      setState(() => _wishlistIds.add(productId));
+      await ref.set({'addedAt': FieldValue.serverTimestamp()});
+    }
   }
 
   void _listenEvents() {
@@ -379,10 +415,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 itemBuilder: (ctx, i) => ProductCard(
                   product: _filteredProducts[i],
                   discountedPrice: _discountedPrice(_filteredProducts[i]),
+                  isWishlisted: _wishlistIds.contains(_filteredProducts[i].id),
+                  onWishlistToggle: () => _toggleWishlist(_filteredProducts[i].id),
                   onAddToCart: () => _addToCart(_filteredProducts[i], 'M'),
                   onTap: () => Navigator.push(context,
                     MaterialPageRoute(builder: (_) => ProductDetailScreen(
                       product: _filteredProducts[i],
+                      isWishlisted: _wishlistIds.contains(_filteredProducts[i].id),
+                      onWishlistToggle: () => _toggleWishlist(_filteredProducts[i].id),
                       onAddToCart: (size) => _addToCart(_filteredProducts[i], size),
                     ))),
                 ),
@@ -514,12 +554,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   itemBuilder: (ctx, i) => ProductCard(
                     product: _filteredProducts[i],
                     discountedPrice: _discountedPrice(_filteredProducts[i]),
+                    isWishlisted: _wishlistIds.contains(_filteredProducts[i].id),
+                    onWishlistToggle: () => _toggleWishlist(_filteredProducts[i].id),
                     onAddToCart: () => _addToCart(_filteredProducts[i], 'M'),
                     onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(
                             builder: (_) => ProductDetailScreen(
                                   product: _filteredProducts[i],
+                                  isWishlisted: _wishlistIds.contains(_filteredProducts[i].id),
+                                  onWishlistToggle: () => _toggleWishlist(_filteredProducts[i].id),
                                   onAddToCart: (size) =>
                                       _addToCart(_filteredProducts[i], size),
                                 ))),
@@ -541,6 +585,12 @@ class _HomeScreenState extends State<HomeScreen> {
     final List<Widget> screens = [
       _buildHome(),
       _buildCategory(),
+      WishlistScreen(
+        wishlistIds: _wishlistIds,
+        getDiscountedPrice: _discountedPrice,
+        onAddToCart: _addToCart,
+        onToggleWishlist: _toggleWishlist,
+      ),
       CartScreen(
         cartItems: _cartItems,
         onRemove: _removeFromCart,
@@ -635,6 +685,7 @@ class _HomeScreenState extends State<HomeScreen> {
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: 'Home'),
           BottomNavigationBarItem(icon: Icon(Icons.category_outlined), label: 'Category'),
+          BottomNavigationBarItem(icon: Icon(Icons.favorite_border_rounded), label: 'Хүсэл'),
           BottomNavigationBarItem(icon: Icon(Icons.shopping_cart_outlined), label: 'Cart'),
           BottomNavigationBarItem(icon: Icon(Icons.receipt_long_outlined), label: 'Захиалга'),
           BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: 'Profile'),

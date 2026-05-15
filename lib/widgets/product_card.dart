@@ -8,6 +8,8 @@ class ProductCard extends StatelessWidget {
   final VoidCallback onAddToCart;
   final VoidCallback onTap;
   final double? discountedPrice; // MNT, null = no active event
+  final bool isWishlisted;
+  final VoidCallback? onWishlistToggle;
 
   const ProductCard({
     super.key,
@@ -15,6 +17,8 @@ class ProductCard extends StatelessWidget {
     required this.onAddToCart,
     required this.onTap,
     this.discountedPrice,
+    this.isWishlisted = false,
+    this.onWishlistToggle,
   });
 
   String _fmt(int v) => v
@@ -23,11 +27,11 @@ class ProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c          = context.c;
-    final origMNT    = (product.price * 1000).toInt();
+    final c           = context.c;
+    final origMNT     = (product.price * 1000).toInt();
     final hasDiscount = discountedPrice != null;
-    final discMNT    = discountedPrice?.toInt() ?? origMNT;
-    final savedMNT   = origMNT - discMNT;
+    final discMNT     = discountedPrice?.toInt() ?? origMNT;
+    final savedMNT    = origMNT - discMNT;
 
     return GestureDetector(
       onTap: onTap,
@@ -73,6 +77,36 @@ class ProductCard extends StatelessWidget {
                         top: 6, left: 6,
                         child: _badge('-${_fmt(savedMNT)}₮', c.primary),
                       ),
+                    // Heart / wishlist button
+                    if (onWishlistToggle != null)
+                      Positioned(
+                        top: 4, right: 4,
+                        child: GestureDetector(
+                          onTap: onWishlistToggle,
+                          child: Container(
+                            width: 30,
+                            height: 30,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.92),
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.12),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Icon(
+                              isWishlisted
+                                  ? Icons.favorite_rounded
+                                  : Icons.favorite_border_rounded,
+                              color: isWishlisted ? Colors.red : Colors.grey,
+                              size: 17,
+                            ),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -104,13 +138,11 @@ class ProductCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           if (hasDiscount) ...[
-                            // Discounted price (big, red)
                             Text('${_fmt(discMNT)}₮',
                                 style: TextStyle(
                                     color: c.primary,
                                     fontSize: 13,
                                     fontWeight: FontWeight.w900)),
-                            // Original strikethrough
                             Text('${_fmt(origMNT)}₮',
                                 style: TextStyle(
                                     color: c.textSecondary,
@@ -151,8 +183,7 @@ class ProductCard extends StatelessWidget {
   }
 
   Widget _badge(String text, Color color) => Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
         decoration: BoxDecoration(
           color: color,
           borderRadius: BorderRadius.circular(6),
@@ -171,8 +202,7 @@ class ProductCard extends StatelessWidget {
         width: double.infinity,
         fit: BoxFit.contain,
         placeholder: (_, __) => Center(
-          child:
-              CircularProgressIndicator(strokeWidth: 2, color: c.primary),
+          child: CircularProgressIndicator(strokeWidth: 2, color: c.primary),
         ),
         errorWidget: (_, __, ___) =>
             Center(child: Icon(Icons.checkroom, size: 60, color: c.primary)),

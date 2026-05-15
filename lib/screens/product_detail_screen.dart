@@ -7,11 +7,15 @@ import '../utils/app_theme.dart';
 class ProductDetailScreen extends StatefulWidget {
   final Product product;
   final Function(String size) onAddToCart;
+  final bool isWishlisted;
+  final VoidCallback? onWishlistToggle;
 
   const ProductDetailScreen({
     super.key,
     required this.product,
     required this.onAddToCart,
+    this.isWishlisted = false,
+    this.onWishlistToggle,
   });
 
   @override
@@ -58,6 +62,18 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
+        actions: [
+          if (widget.onWishlistToggle != null)
+            IconButton(
+              icon: Icon(
+                widget.isWishlisted
+                    ? Icons.favorite_rounded
+                    : Icons.favorite_border_rounded,
+                color: widget.isWishlisted ? Colors.red : null,
+              ),
+              onPressed: widget.onWishlistToggle,
+            ),
+        ],
       ),
       body: SingleChildScrollView(
         child: Column(
