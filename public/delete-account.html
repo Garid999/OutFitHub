@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Delete Account – Anime Store</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #f5f5f5;
+      color: #333;
+      line-height: 1.7;
+    }
+    header {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      color: #fff;
+      padding: 40px 20px;
+      text-align: center;
+    }
+    header h1 { font-size: 2rem; letter-spacing: 1px; }
+    header p  { margin-top: 8px; opacity: 0.8; font-size: 0.95rem; }
+    .container {
+      max-width: 720px;
+      margin: 40px auto;
+      background: #fff;
+      border-radius: 12px;
+      padding: 40px 48px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    }
+    h2 {
+      color: #0f3460;
+      font-size: 1.2rem;
+      margin: 28px 0 10px;
+      padding-bottom: 6px;
+      border-bottom: 2px solid #e8eaf0;
+    }
+    h2:first-child { margin-top: 0; }
+    p  { margin-bottom: 12px; }
+    ol, ul { margin: 8px 0 14px 22px; }
+    li { margin-bottom: 8px; }
+    .warning {
+      background: #fff3cd;
+      border-left: 4px solid #ffc107;
+      border-radius: 6px;
+      padding: 16px 20px;
+      margin: 20px 0;
+    }
+    .warning strong { color: #856404; }
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 0.95rem;
+    }
+    .data-table th {
+      background: #0f3460;
+      color: #fff;
+      padding: 10px 14px;
+      text-align: left;
+    }
+    .data-table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid #e8eaf0;
+    }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tr:nth-child(even) td { background: #f8f9ff; }
+    .badge-del  { background: #fdecea; color: #c62828; border-radius: 4px; padding: 2px 8px; font-size: 0.8rem; font-weight: 700; }
+    .badge-keep { background: #e8f5e9; color: #2e7d32; border-radius: 4px; padding: 2px 8px; font-size: 0.8rem; font-weight: 700; }
+    .contact-box {
+      background: #e8f0fe;
+      border-radius: 8px;
+      padding: 20px 24px;
+      margin-top: 24px;
+    }
+    .contact-box a { color: #0f3460; font-weight: 600; }
+    footer {
+      text-align: center;
+      padding: 24px;
+      color: #aaa;
+      font-size: 0.85rem;
+    }
+    @media (max-width: 600px) {
+      .container { padding: 24px 18px; margin: 16px; }
+      header h1  { font-size: 1.4rem; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🎌 Anime Store</h1>
+  <p>Account Deletion Request</p>
+</header>
+
+<div class="container">
+
+  <h2>Request Account Deletion</h2>
+  <p>
+    You can request the deletion of your <strong>Anime Store</strong> account and all
+    associated personal data at any time. Please follow the steps below.
+  </p>
+
+  <div class="warning">
+    <strong>⚠️ Warning:</strong> Account deletion is permanent and cannot be undone.
+    All your data will be removed as described below.
+  </div>
+
+  <h2>How to Delete Your Account</h2>
+  <p><strong>Option 1 — Delete directly from the app:</strong></p>
+  <ol>
+    <li>Open the <strong>Anime Store</strong> app on your device</li>
+    <li>Go to <strong>Profile</strong> (bottom navigation)</li>
+    <li>Tap <strong>Settings</strong> or <strong>Edit Profile</strong></li>
+    <li>Scroll down and tap <strong>"Delete Account"</strong></li>
+    <li>Confirm deletion when prompted</li>
+  </ol>
+
+  <p><strong>Option 2 — Request via email:</strong></p>
+  <ol>
+    <li>Send an email to <a href="mailto:garidga99@gmail.com">garidga99@gmail.com</a></li>
+    <li>Use subject line: <strong>"Account Deletion Request – Anime Store"</strong></li>
+    <li>Include the email address associated with your account</li>
+    <li>We will process your request within <strong>7 business days</strong></li>
+  </ol>
+
+  <h2>What Data Is Deleted vs. Kept</h2>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Data Type</th>
+        <th>Action</th>
+        <th>Retention Period</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Name &amp; Email address</td>
+        <td><span class="badge-del">DELETED</span></td>
+        <td>Immediately upon deletion</td>
+      </tr>
+      <tr>
+        <td>Profile picture</td>
+        <td><span class="badge-del">DELETED</span></td>
+        <td>Immediately upon deletion</td>
+      </tr>
+      <tr>
+        <td>Delivery address</td>
+        <td><span class="badge-del">DELETED</span></td>
+        <td>Immediately upon deletion</td>
+      </tr>
+      <tr>
+        <td>Cart &amp; Wishlist data</td>
+        <td><span class="badge-del">DELETED</span></td>
+        <td>Immediately upon deletion</td>
+      </tr>
+      <tr>
+        <td>Order history</td>
+        <td><span class="badge-keep">KEPT</span></td>
+        <td>Retained for 90 days for legal &amp; accounting purposes, then deleted</td>
+      </tr>
+      <tr>
+        <td>Support chat messages</td>
+        <td><span class="badge-del">DELETED</span></td>
+        <td>Immediately upon deletion</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="contact-box">
+    <strong>📧 Contact Us</strong><br/>
+    If you have any questions about account deletion, contact us at:<br/>
+    <a href="mailto:garidga99@gmail.com">garidga99@gmail.com</a><br/>
+    <small>Developer: Anime Store &nbsp;|&nbsp; App: Anime Store (Android)</small>
+  </div>
+
+</div>
+
+<footer>
+  &copy; 2026 Anime Store. All rights reserved.
+</footer>
+
+</body>
+</html>
