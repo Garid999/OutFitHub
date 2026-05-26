@@ -97,6 +97,45 @@ On first launch the app seeds the product catalog automatically — no manual da
 
 ---
 
+## For Users
+
+### Download & Install
+
+1. Go to the [Releases page](https://github.com/Garid999/OutFitHub/releases)
+2. Download the latest `AnimeStore-v1.0.0.apk` file
+3. On your Android phone, open the downloaded file
+4. If prompted, enable **"Install from unknown sources"** in your settings
+5. Tap **Install** — done!
+
+> Requires Android 6.0 or higher.
+
+### Features
+
+- **Browse by anime** — filter products by series: Demon Slayer, Jujutsu Kaisen, Attack on Titan, Bleach, Chainsaw Man, Solo Leveling and more
+- **Real-time stock** — see exactly how many pieces are left in each size (S / M / L / XL / XXL)
+- **Wishlist** — save your favorite items and come back to them anytime
+- **Live discounts** — sales and promotions apply to your cart automatically
+- **Easy checkout** — enter your address and pay via Khan Bank transfer
+- **3-day delivery** — orders delivered anywhere in Ulaanbaatar within 3 calendar days
+- **Order history** — track every order you've placed with full details
+- **Support chat** — message the store admin directly inside the app
+- **Dark & Light mode** — switch themes anytime from the app bar
+
+### Pricing
+
+| Item | Price |
+|---|---|
+| Acid-wash oversized T-shirt | ₮39,000 |
+| Oversized Hoodie | ₮69,000 |
+| Delivery fee | ₮5,000 |
+
+### Contact
+
+- **Email:** garidga999@gmail.com
+- **In-app chat:** available on every screen via the notification bell
+
+---
+
 ## License
 
 © 2026 Anime Store — Garid Gantumur. All rights reserved.
